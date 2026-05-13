@@ -11,11 +11,19 @@ import {
   Briefcase,
   ArrowRight,
 } from "lucide-react";
-import { Trophy } from "lucide-react";
+import { Trophy, MessageSquare, Pin, DollarSign } from "lucide-react";
 import { getLawyerById } from "@/server/lawyers";
 import { getLawyerRankings } from "@/server/rankings";
+import {
+  getLawyerNps,
+  getLawyerInternalRatings,
+  getLawyerEngagements,
+  getLawyerNotes,
+} from "@/server/insights";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Badge } from "@/components/ui/Badge";
+import { NpsBadge, NpsBreakdown } from "@/components/ui/NpsBadge";
+import { RatingAverages } from "@/components/ui/StarRating";
 import {
   LAWYER_ROLE_LABELS,
   RANKING_PUBLISHER_LABELS,
@@ -31,10 +39,15 @@ export default async function LawyerDetailPage({
   params,
 }: LawyerDetailPageProps) {
   const { id } = await params;
-  const [lawyer, rankings] = await Promise.all([
-    getLawyerById(id),
-    getLawyerRankings(id),
-  ]);
+  const [lawyer, rankings, nps, internalRatings, engagements, notes] =
+    await Promise.all([
+      getLawyerById(id),
+      getLawyerRankings(id),
+      getLawyerNps(id),
+      getLawyerInternalRatings(id),
+      getLawyerEngagements(id),
+      getLawyerNotes(id),
+    ]);
 
   if (!lawyer || lawyer.deletedAt) {
     notFound();
@@ -296,14 +309,102 @@ export default async function LawyerDetailPage({
             )}
           </div>
 
-          <div className="rounded-lg border border-dashed border-gray-200 bg-gray-50 p-6">
-            <h3 className="mb-2 text-sm font-semibold text-gray-400">
-              Internal Ratings & NPS
+          {/* NPS & Internal Ratings */}
+          <div className="rounded-lg border border-gray-200 bg-white p-6">
+            <h3 className="mb-4 text-sm font-semibold uppercase tracking-wider text-gray-500">
+              Internal Sentiment
             </h3>
-            <p className="text-xs text-gray-400">Coming in Session 4</p>
+            <div className="mb-4">
+              <NpsBadge nps={nps} size="lg" />
+            </div>
+            <NpsBreakdown nps={nps} />
+            {internalRatings.length > 0 && (
+              <div className="mt-4 border-t border-gray-100 pt-4">
+                <p className="mb-2 text-xs font-medium text-gray-500">
+                  Avg. Ratings ({internalRatings.length} review{internalRatings.length !== 1 ? "s" : ""})
+                </p>
+                <RatingAverages ratings={internalRatings} />
+              </div>
+            )}
           </div>
+
+          {/* Notes */}
+          {notes.length > 0 && (
+            <div className="rounded-lg border border-gray-200 bg-white p-6">
+              <h3 className="mb-4 text-sm font-semibold uppercase tracking-wider text-gray-500">
+                <MessageSquare size={14} className="mr-2 inline" />
+                Notes ({notes.length})
+              </h3>
+              <div className="space-y-3">
+                {notes.map((note) => (
+                  <div
+                    key={note.id}
+                    className={`rounded-md border p-3 text-sm ${
+                      note.isPinned
+                        ? "border-amber-200 bg-amber-50/50"
+                        : "border-gray-100"
+                    }`}
+                  >
+                    {note.isPinned && (
+                      <Pin size={10} className="mb-1 inline text-amber-500" />
+                    )}
+                    <p className="text-gray-700">{note.content}</p>
+                    <p className="mt-1 text-xs text-gray-400">
+                      {note.author.name} &middot;{" "}
+                      {new Date(note.createdAt).toLocaleDateString()}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       </div>
+
+      {/* Engagements — full width */}
+      {engagements.length > 0 && (
+        <div className="mt-6 rounded-lg border border-gray-200 bg-white p-6">
+          <h3 className="mb-4 text-sm font-semibold uppercase tracking-wider text-gray-500">
+            <DollarSign size={14} className="mr-2 inline" />
+            Engagements ({engagements.length})
+          </h3>
+          <div className="divide-y divide-gray-100">
+            {engagements.map((eng) => (
+              <div key={eng.id} className="flex items-center justify-between py-3">
+                <div>
+                  <p className="text-sm font-medium text-gray-900">
+                    {eng.matterName}
+                  </p>
+                  <p className="text-xs text-gray-500">
+                    <Link href={`/firms/${eng.firm.id}`} className="hover:text-teal-700">
+                      {eng.firm.shortName ?? eng.firm.name}
+                    </Link>
+                    {" | "}
+                    {new Date(eng.startDate).toLocaleDateString()} -{" "}
+                    {eng.endDate ? new Date(eng.endDate).toLocaleDateString() : "ongoing"}
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Badge
+                    variant={
+                      eng.outcome === "WON" ? "green" :
+                      eng.outcome === "ONGOING" ? "blue" :
+                      eng.outcome === "COMPLETED" ? "teal" : "gray"
+                    }
+                  >
+                    {eng.outcome}
+                  </Badge>
+                  {eng.totalFeesUsd != null && (
+                    <span className="text-sm text-gray-600">
+                      ${(eng.totalFeesUsd / 100).toLocaleString()}
+                    </span>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

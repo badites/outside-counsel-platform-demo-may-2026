@@ -20,7 +20,7 @@ async function main() {
     create: { email: "admin@example.com", name: "Admin User", role: "ADMIN" },
   });
 
-  await prisma.user.upsert({
+  const userJames = await prisma.user.upsert({
     where: { email: "james.chen@example.com" },
     update: {},
     create: { email: "james.chen@example.com", name: "James Chen", role: "LAWYER" },
@@ -539,6 +539,144 @@ async function main() {
     });
   }
   console.log(`  Lawyer Rankings: ${lawyerRankingData.length}`);
+
+  // ─── NPS Recommendations ───────────────────────────────────────────────
+  const npsData: { target: "FIRM" | "LAWYER"; firm?: string; lawyer?: string; user: string; nps: number; pa?: string; reason?: string }[] = [
+    // Firm-level NPS
+    { target: "FIRM", firm: "Baker", user: userSarah.id, nps: 9, pa: "corporate-ma", reason: "Excellent responsiveness and deep market knowledge" },
+    { target: "FIRM", firm: "Baker", user: userJames.id, nps: 8, pa: "corporate-ma", reason: "Strong team but premium pricing" },
+    { target: "FIRM", firm: "A&O", user: userSarah.id, nps: 9, pa: "banking-finance", reason: "Top-tier banking expertise" },
+    { target: "FIRM", firm: "A&O", user: userJames.id, nps: 7, reason: "Good quality but slow turnaround on some matters" },
+    { target: "FIRM", firm: "Linklaters", user: userSarah.id, nps: 8, pa: "banking-finance", reason: "Consistent quality" },
+    { target: "FIRM", firm: "T&G", user: userSarah.id, nps: 10, pa: "intellectual-property", reason: "Best IP team in Thailand, hands down" },
+    { target: "FIRM", firm: "T&G", user: userJames.id, nps: 9, pa: "intellectual-property", reason: "Very strong IP practice" },
+    { target: "FIRM", firm: "WCP", user: userSarah.id, nps: 8, pa: "corporate-ma", reason: "Solid Thai firm with good M&A capability" },
+    { target: "FIRM", firm: "WCP", user: userJames.id, nps: 7, reason: "Good but sometimes overstretched" },
+    { target: "FIRM", firm: "Chandler", user: userSarah.id, nps: 7, pa: "energy-natural-resources", reason: "Strong on energy/infrastructure" },
+    { target: "FIRM", firm: "R&T", user: userJames.id, nps: 9, pa: "dispute-resolution", reason: "Outstanding litigation team in Singapore" },
+    { target: "FIRM", firm: "NRF", user: userSarah.id, nps: 7, pa: "energy-natural-resources" },
+    { target: "FIRM", firm: "Kudun", user: userSarah.id, nps: 8, pa: "corporate-ma", reason: "Great value for boutique quality" },
+    { target: "FIRM", firm: "Kudun", user: userJames.id, nps: 9, pa: "corporate-ma", reason: "More personal attention than big firms" },
+    { target: "FIRM", firm: "Pisut", user: userSarah.id, nps: 6, reason: "Still building their team" },
+    { target: "FIRM", firm: "Pisut", user: userJames.id, nps: 5, reason: "Too junior for complex matters" },
+
+    // Lawyer-level NPS
+    { target: "LAWYER", lawyer: "Kullarat Phongsathaporn", user: userSarah.id, nps: 10, pa: "corporate-ma", reason: "Best M&A lawyer we've worked with" },
+    { target: "LAWYER", lawyer: "Patrick Leysen", user: userSarah.id, nps: 9, pa: "capital-markets", reason: "Excellent cross-border expertise" },
+    { target: "LAWYER", lawyer: "Darani Vachanavuttivong", user: userJames.id, nps: 10, pa: "intellectual-property", reason: "Unmatched IP expertise in Thailand" },
+    { target: "LAWYER", lawyer: "Veeranuch Thammavaranucupt", user: userSarah.id, nps: 9, pa: "corporate-ma" },
+    { target: "LAWYER", lawyer: "Lee Eng Beng", user: userJames.id, nps: 10, pa: "dispute-resolution", reason: "World-class litigator" },
+    { target: "LAWYER", lawyer: "Kudun Sukhumananda", user: userSarah.id, nps: 8, pa: "corporate-ma", reason: "Brings big-firm quality at boutique rates" },
+    { target: "LAWYER", lawyer: "Kudun Sukhumananda", user: userJames.id, nps: 9, pa: "banking-finance" },
+    { target: "LAWYER", lawyer: "John Frangos", user: userSarah.id, nps: 8, pa: "banking-finance" },
+    { target: "LAWYER", lawyer: "Pisut Rakwong", user: userSarah.id, nps: 6, pa: "corporate-ma", reason: "Capable but needs more seasoning" },
+  ];
+
+  for (const n of npsData) {
+    await prisma.recommendation.create({
+      data: {
+        targetType: n.target,
+        firmId: n.firm ? firms[n.firm].id : null,
+        lawyerId: n.lawyer ? lawyers[n.lawyer].id : null,
+        recommenderId: n.user,
+        npsScore: n.nps,
+        practiceAreaId: n.pa ? pa[n.pa].id : null,
+        reason: n.reason ?? null,
+      },
+    });
+  }
+  console.log(`  NPS Recommendations: ${npsData.length}`);
+
+  // ─── Internal Ratings ──────────────────────────────────────────────────
+  const ratingData: { target: "FIRM" | "LAWYER"; firm?: string; lawyer?: string; user: string; r: number; q: number; c: number; v: number; s: number; comment?: string }[] = [
+    { target: "FIRM", firm: "Baker", user: userSarah.id, r: 5, q: 5, c: 4, v: 3, s: 5, comment: "Outstanding quality but expensive" },
+    { target: "FIRM", firm: "Baker", user: userJames.id, r: 4, q: 5, c: 4, v: 3, s: 5 },
+    { target: "FIRM", firm: "A&O", user: userSarah.id, r: 4, q: 5, c: 5, v: 3, s: 5 },
+    { target: "FIRM", firm: "T&G", user: userSarah.id, r: 5, q: 5, c: 4, v: 4, s: 5, comment: "Best IP team, good value" },
+    { target: "FIRM", firm: "WCP", user: userSarah.id, r: 4, q: 4, c: 4, v: 4, s: 4 },
+    { target: "FIRM", firm: "Kudun", user: userSarah.id, r: 5, q: 4, c: 4, v: 5, s: 4, comment: "Great value boutique" },
+    { target: "FIRM", firm: "Kudun", user: userJames.id, r: 5, q: 4, c: 3, v: 5, s: 4 },
+    { target: "LAWYER", lawyer: "Kullarat Phongsathaporn", user: userSarah.id, r: 5, q: 5, c: 5, v: 4, s: 5 },
+    { target: "LAWYER", lawyer: "Darani Vachanavuttivong", user: userJames.id, r: 5, q: 5, c: 4, v: 4, s: 5 },
+    { target: "LAWYER", lawyer: "Kudun Sukhumananda", user: userSarah.id, r: 5, q: 4, c: 4, v: 5, s: 4 },
+  ];
+
+  for (const rd of ratingData) {
+    const overall = (rd.r + rd.q + rd.c + rd.v + rd.s) / 5;
+    await prisma.internalRating.create({
+      data: {
+        targetType: rd.target,
+        firmId: rd.firm ? firms[rd.firm].id : null,
+        lawyerId: rd.lawyer ? lawyers[rd.lawyer].id : null,
+        ratedById: rd.user,
+        responsiveness: rd.r,
+        quality: rd.q,
+        commercialAwareness: rd.c,
+        value: rd.v,
+        subjectMatterExpertise: rd.s,
+        overallScore: overall,
+        comment: rd.comment ?? null,
+      },
+    });
+  }
+  console.log(`  Internal Ratings: ${ratingData.length}`);
+
+  // ─── Engagements ───────────────────────────────────────────────────────
+  const engagementData: { firm: string; lawyer?: string; matter: string; type: "TRANSACTIONAL" | "LITIGATION" | "ADVISORY" | "REGULATORY" | "IP"; jur: string; entity: string; start: string; end?: string; outcome: "COMPLETED" | "ONGOING" | "WON" | "SETTLED"; fees?: number }[] = [
+    { firm: "Baker", lawyer: "Kullarat Phongsathaporn", matter: "SCG Packaging Acquisition", type: "TRANSACTIONAL", jur: "Thailand", entity: "SCG Packaging", start: "2023-03-01", end: "2023-09-15", outcome: "COMPLETED", fees: 45000000 },
+    { firm: "Baker", lawyer: "Pimvimol Vipamaneerut", matter: "Employment Restructuring Advisory", type: "ADVISORY", jur: "Thailand", entity: "SCG Chemicals", start: "2024-01-15", end: "2024-06-30", outcome: "COMPLETED", fees: 12000000 },
+    { firm: "A&O", lawyer: "Patrick Leysen", matter: "Green Bond Issuance", type: "TRANSACTIONAL", jur: "Thailand", entity: "SCG", start: "2024-06-01", end: "2024-12-20", outcome: "COMPLETED", fees: 35000000 },
+    { firm: "Linklaters", lawyer: "John Frangos", matter: "Project Finance — Solar Farm", type: "TRANSACTIONAL", jur: "Thailand", entity: "SCG Cleanergy", start: "2024-09-01", outcome: "ONGOING", fees: 28000000 },
+    { firm: "T&G", lawyer: "Darani Vachanavuttivong", matter: "Trademark Portfolio Review", type: "IP", jur: "Thailand", entity: "SCG", start: "2024-04-01", end: "2024-08-15", outcome: "COMPLETED", fees: 8500000 },
+    { firm: "WCP", lawyer: "Veeranuch Thammavaranucupt", matter: "JV Agreement — Vietnam Cement", type: "TRANSACTIONAL", jur: "Thailand", entity: "SCG", start: "2023-11-01", end: "2024-04-30", outcome: "COMPLETED", fees: 22000000 },
+    { firm: "R&T", lawyer: "Lee Eng Beng", matter: "Singapore Arbitration — Supply Dispute", type: "LITIGATION", jur: "Singapore", entity: "SCG Trading", start: "2023-06-01", end: "2024-12-15", outcome: "WON", fees: 55000000 },
+    { firm: "Kudun", lawyer: "Kudun Sukhumananda", matter: "Real Estate Acquisition Advisory", type: "TRANSACTIONAL", jur: "Thailand", entity: "SCG", start: "2025-01-15", outcome: "ONGOING", fees: 15000000 },
+    { firm: "NRF", lawyer: "Bob Kongyingyong", matter: "Power Plant Regulatory Compliance", type: "REGULATORY", jur: "Thailand", entity: "SCG Cleanergy", start: "2024-02-01", end: "2024-07-30", outcome: "COMPLETED", fees: 9500000 },
+    { firm: "Pisut", lawyer: "Pisut Rakwong", matter: "Supplier Contract Dispute", type: "LITIGATION", jur: "Thailand", entity: "SCG Chemicals", start: "2025-02-01", outcome: "ONGOING", fees: 5000000 },
+  ];
+
+  for (const e of engagementData) {
+    await prisma.engagement.create({
+      data: {
+        firmId: firms[e.firm].id,
+        lawyerId: e.lawyer ? lawyers[e.lawyer].id : null,
+        matterName: e.matter,
+        matterType: e.type,
+        jurisdictionId: jur[e.jur].id,
+        entityName: e.entity,
+        startDate: new Date(e.start),
+        endDate: e.end ? new Date(e.end) : null,
+        outcome: e.outcome,
+        totalFeesUsd: e.fees ?? null,
+        createdById: userSarah.id,
+      },
+    });
+  }
+  console.log(`  Engagements: ${engagementData.length}`);
+
+  // ─── Relationship Notes ────────────────────────────────────────────────
+  const noteData: { target: "FIRM" | "LAWYER"; firm?: string; lawyer?: string; user: string; content: string; pinned: boolean }[] = [
+    { target: "FIRM", firm: "Baker", user: userSarah.id, content: "Strong relationship with managing partner. Preferred firm for complex M&A.", pinned: true },
+    { target: "FIRM", firm: "Kudun", user: userSarah.id, content: "Kudun team came from Baker — they know our business well. Consider for mid-market deals.", pinned: true },
+    { target: "FIRM", firm: "Pisut", user: userJames.id, content: "New firm, still proving themselves. Monitor quality on current engagement.", pinned: false },
+    { target: "LAWYER", lawyer: "Kullarat Phongsathaporn", user: userSarah.id, content: "Go-to lawyer for any Thailand M&A over $50M. Always available.", pinned: true },
+    { target: "LAWYER", lawyer: "Lee Eng Beng", user: userJames.id, content: "Extraordinary litigator. Book well in advance — very busy.", pinned: true },
+    { target: "LAWYER", lawyer: "Darani Vachanavuttivong", user: userSarah.id, content: "Knows our entire IP portfolio. Irreplaceable for trademark matters.", pinned: true },
+  ];
+
+  for (const n of noteData) {
+    await prisma.relationshipNote.create({
+      data: {
+        targetType: n.target,
+        firmId: n.firm ? firms[n.firm].id : null,
+        lawyerId: n.lawyer ? lawyers[n.lawyer].id : null,
+        authorId: n.user,
+        content: n.content,
+        isPinned: n.pinned,
+      },
+    });
+  }
+  console.log(`  Relationship Notes: ${noteData.length}`);
 
   console.log("Seed complete!");
 }

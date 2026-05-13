@@ -11,11 +11,19 @@ import {
   GitBranch,
   Briefcase,
 } from "lucide-react";
-import { Trophy } from "lucide-react";
+import { Trophy, MessageSquare, Pin, DollarSign } from "lucide-react";
 import { getFirmById } from "@/server/firms";
 import { getFirmRankings } from "@/server/rankings";
+import {
+  getFirmNps,
+  getFirmInternalRatings,
+  getFirmEngagements,
+  getFirmNotes,
+} from "@/server/insights";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Badge } from "@/components/ui/Badge";
+import { NpsBadge, NpsBreakdown } from "@/components/ui/NpsBadge";
+import { RatingAverages } from "@/components/ui/StarRating";
 import {
   FIRM_TYPE_LABELS,
   LAWYER_ROLE_LABELS,
@@ -39,10 +47,15 @@ interface FirmDetailPageProps {
 
 export default async function FirmDetailPage({ params }: FirmDetailPageProps) {
   const { id } = await params;
-  const [firm, rankings] = await Promise.all([
-    getFirmById(id),
-    getFirmRankings(id),
-  ]);
+  const [firm, rankings, nps, internalRatings, engagements, notes] =
+    await Promise.all([
+      getFirmById(id),
+      getFirmRankings(id),
+      getFirmNps(id),
+      getFirmInternalRatings(id),
+      getFirmEngagements(id),
+      getFirmNotes(id),
+    ]);
 
   if (!firm || firm.deletedAt) {
     notFound();
@@ -314,14 +327,125 @@ export default async function FirmDetailPage({ params }: FirmDetailPageProps) {
             )}
           </div>
 
-          <div className="rounded-lg border border-dashed border-gray-200 bg-gray-50 p-6">
-            <h3 className="mb-2 text-sm font-semibold text-gray-400">
-              Internal Ratings & NPS
+          {/* NPS & Internal Ratings */}
+          <div className="rounded-lg border border-gray-200 bg-white p-6">
+            <h3 className="mb-4 text-sm font-semibold uppercase tracking-wider text-gray-500">
+              Internal Sentiment
             </h3>
-            <p className="text-xs text-gray-400">Coming in Session 4</p>
+            <div className="mb-4">
+              <NpsBadge nps={nps} size="lg" />
+            </div>
+            <NpsBreakdown nps={nps} />
+            {internalRatings.length > 0 && (
+              <div className="mt-4 border-t border-gray-100 pt-4">
+                <p className="mb-2 text-xs font-medium text-gray-500">
+                  Avg. Ratings ({internalRatings.length} review{internalRatings.length !== 1 ? "s" : ""})
+                </p>
+                <RatingAverages ratings={internalRatings} />
+              </div>
+            )}
           </div>
+
+          {/* Relationship Notes */}
+          {notes.length > 0 && (
+            <div className="rounded-lg border border-gray-200 bg-white p-6">
+              <h3 className="mb-4 text-sm font-semibold uppercase tracking-wider text-gray-500">
+                <MessageSquare size={14} className="mr-2 inline" />
+                Notes ({notes.length})
+              </h3>
+              <div className="space-y-3">
+                {notes.map((note) => (
+                  <div
+                    key={note.id}
+                    className={`rounded-md border p-3 text-sm ${
+                      note.isPinned
+                        ? "border-amber-200 bg-amber-50/50"
+                        : "border-gray-100"
+                    }`}
+                  >
+                    {note.isPinned && (
+                      <Pin size={10} className="mb-1 inline text-amber-500" />
+                    )}
+                    <p className="text-gray-700">{note.content}</p>
+                    <p className="mt-1 text-xs text-gray-400">
+                      {note.author.name} &middot;{" "}
+                      {new Date(note.createdAt).toLocaleDateString()}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       </div>
+
+      {/* Engagements section — full width below */}
+      {engagements.length > 0 && (
+        <div className="mt-6 rounded-lg border border-gray-200 bg-white p-6">
+          <h3 className="mb-4 text-sm font-semibold uppercase tracking-wider text-gray-500">
+            <DollarSign size={14} className="mr-2 inline" />
+            Engagements ({engagements.length})
+          </h3>
+          <div className="overflow-x-auto">
+            <table className="min-w-full divide-y divide-gray-200">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th className="px-3 py-2 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Matter</th>
+                  <th className="px-3 py-2 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Type</th>
+                  <th className="px-3 py-2 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Lead Lawyer</th>
+                  <th className="px-3 py-2 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Dates</th>
+                  <th className="px-3 py-2 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Outcome</th>
+                  <th className="px-3 py-2 text-right text-xs font-medium uppercase tracking-wider text-gray-500">Fees (USD)</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {engagements.map((eng) => (
+                  <tr key={eng.id} className="hover:bg-gray-50">
+                    <td className="px-3 py-2 text-sm font-medium text-gray-900">
+                      {eng.matterName}
+                      {eng.entityName && (
+                        <p className="text-xs text-gray-400">{eng.entityName}</p>
+                      )}
+                    </td>
+                    <td className="px-3 py-2">
+                      <Badge variant="default">{eng.matterType}</Badge>
+                    </td>
+                    <td className="px-3 py-2 text-sm text-gray-600">
+                      {eng.lawyer ? (
+                        <Link href={`/lawyers/${eng.lawyer.id}`} className="hover:text-teal-700">
+                          {eng.lawyer.name}
+                        </Link>
+                      ) : "-"}
+                    </td>
+                    <td className="px-3 py-2 text-xs text-gray-500">
+                      {new Date(eng.startDate).toLocaleDateString()} -{" "}
+                      {eng.endDate ? new Date(eng.endDate).toLocaleDateString() : "ongoing"}
+                    </td>
+                    <td className="px-3 py-2">
+                      <Badge
+                        variant={
+                          eng.outcome === "WON" ? "green" :
+                          eng.outcome === "ONGOING" ? "blue" :
+                          eng.outcome === "COMPLETED" ? "teal" :
+                          eng.outcome === "SETTLED" ? "amber" :
+                          eng.outcome === "LOST" ? "red" : "gray"
+                        }
+                      >
+                        {eng.outcome}
+                      </Badge>
+                    </td>
+                    <td className="px-3 py-2 text-right text-sm text-gray-700">
+                      {eng.totalFeesUsd != null
+                        ? `$${(eng.totalFeesUsd / 100).toLocaleString()}`
+                        : "-"}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

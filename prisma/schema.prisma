@@ -44,6 +44,44 @@ enum LawyerRankingCategory {
   RECOGNISED
 }
 
+enum TargetType {
+  FIRM
+  LAWYER
+}
+
+enum MatterType {
+  LITIGATION
+  ARBITRATION
+  REGULATORY
+  TRANSACTIONAL
+  ADVISORY
+  IP
+  EMPLOYMENT
+  OTHER
+}
+
+enum EngagementOutcome {
+  WON
+  LOST
+  SETTLED
+  ONGOING
+  COMPLETED
+  OTHER
+}
+
+enum BenchmarkRole {
+  PARTNER
+  OF_COUNSEL
+  ASSOCIATE
+  PARALEGAL
+}
+
+enum BenchmarkSource {
+  ACTUAL
+  PROPOSED
+  MARKET
+}
+
 // ─── Auth / Users ────────────────────────────────────────────────────────────
 
 model User {
@@ -54,6 +92,12 @@ model User {
   createdAt DateTime  @default(now()) @map("created_at")
   updatedAt DateTime  @updatedAt @map("updated_at")
   deletedAt DateTime? @map("deleted_at")
+
+  internalRatings    InternalRating[]
+  recommendations    Recommendation[]
+  engagements        Engagement[]
+  relationshipNotes  RelationshipNote[]
+  costBenchmarks     CostBenchmark[]
 
   @@map("users")
 }
@@ -73,6 +117,8 @@ model PracticeArea {
   lawyerPracticeAreas LawyerPracticeArea[]
   firmRankings        FirmRanking[]
   lawyerRankings      LawyerRanking[]
+  recommendations     Recommendation[]
+  costBenchmarks      CostBenchmark[]
 
   @@map("practice_areas")
 }
@@ -88,6 +134,8 @@ model Jurisdiction {
   lawyerPracticeAreas LawyerPracticeArea[]
   firmRankings        FirmRanking[]
   lawyerRankings      LawyerRanking[]
+  engagements         Engagement[]
+  costBenchmarks      CostBenchmark[]
 
   @@map("jurisdictions")
 }
@@ -116,6 +164,11 @@ model Firm {
   firmLawyers     FirmLawyer[]
   practiceAreas   FirmPracticeArea[]
   rankings        FirmRanking[]
+  internalRatings InternalRating[]
+  recommendations Recommendation[]
+  engagements     Engagement[]
+  relationshipNotes RelationshipNote[]
+  costBenchmarks  CostBenchmark[]
 
   @@map("firms")
 }
@@ -139,6 +192,11 @@ model Lawyer {
   firmLawyers     FirmLawyer[]
   practiceAreas   LawyerPracticeArea[]
   rankings        LawyerRanking[]
+  internalRatings InternalRating[]
+  recommendations Recommendation[]
+  engagements     Engagement[]
+  relationshipNotes RelationshipNote[]
+  costBenchmarks  CostBenchmark[]
 
   @@map("lawyers")
 }
@@ -249,4 +307,114 @@ model LawyerRanking {
 
   @@unique([lawyerId, rankingSourceId, practiceAreaId, jurisdictionId])
   @@map("lawyer_rankings")
+}
+
+// ─── Internal Insights ──────────────────────────────────────────────────────
+
+model InternalRating {
+  id                      String     @id @default(cuid())
+  targetType              TargetType @map("target_type")
+  firmId                  String?    @map("firm_id")
+  firm                    Firm?      @relation(fields: [firmId], references: [id])
+  lawyerId                String?    @map("lawyer_id")
+  lawyer                  Lawyer?    @relation(fields: [lawyerId], references: [id])
+  ratedById               String     @map("rated_by_id")
+  ratedBy                 User       @relation(fields: [ratedById], references: [id])
+  responsiveness          Int        // 1-5
+  quality                 Int        // 1-5
+  commercialAwareness     Int        @map("commercial_awareness") // 1-5
+  value                   Int        // 1-5
+  subjectMatterExpertise  Int        @map("subject_matter_expertise") // 1-5
+  overallScore            Float      @map("overall_score") // computed weighted avg
+  comment                 String?
+  createdAt               DateTime   @default(now()) @map("created_at")
+  updatedAt               DateTime   @updatedAt @map("updated_at")
+
+  @@map("internal_ratings")
+}
+
+model Recommendation {
+  id              String       @id @default(cuid())
+  targetType      TargetType   @map("target_type")
+  firmId          String?      @map("firm_id")
+  firm            Firm?        @relation(fields: [firmId], references: [id])
+  lawyerId        String?      @map("lawyer_id")
+  lawyer          Lawyer?      @relation(fields: [lawyerId], references: [id])
+  recommenderId   String       @map("recommender_id")
+  recommender     User         @relation(fields: [recommenderId], references: [id])
+  npsScore        Int          @map("nps_score") // 0-10
+  practiceAreaId  String?      @map("practice_area_id")
+  practiceArea    PracticeArea? @relation(fields: [practiceAreaId], references: [id])
+  reason          String?
+  createdAt       DateTime     @default(now()) @map("created_at")
+  updatedAt       DateTime     @updatedAt @map("updated_at")
+
+  @@map("recommendations")
+}
+
+model Engagement {
+  id             String            @id @default(cuid())
+  firmId         String            @map("firm_id")
+  firm           Firm              @relation(fields: [firmId], references: [id])
+  lawyerId       String?           @map("lawyer_id")
+  lawyer         Lawyer?           @relation(fields: [lawyerId], references: [id])
+  matterName     String            @map("matter_name")
+  matterType     MatterType        @map("matter_type")
+  jurisdictionId String?           @map("jurisdiction_id")
+  jurisdiction   Jurisdiction?     @relation(fields: [jurisdictionId], references: [id])
+  entityName     String?           @map("entity_name") // which SCG entity
+  startDate      DateTime          @map("start_date")
+  endDate        DateTime?         @map("end_date")
+  outcome        EngagementOutcome @default(ONGOING)
+  totalFeesUsd   Int?              @map("total_fees_usd") // cents
+  notes          String?
+  createdById    String            @map("created_by_id")
+  createdBy      User              @relation(fields: [createdById], references: [id])
+  createdAt      DateTime          @default(now()) @map("created_at")
+  updatedAt      DateTime          @updatedAt @map("updated_at")
+  deletedAt      DateTime?         @map("deleted_at")
+
+  @@map("engagements")
+}
+
+model RelationshipNote {
+  id         String     @id @default(cuid())
+  targetType TargetType @map("target_type")
+  firmId     String?    @map("firm_id")
+  firm       Firm?      @relation(fields: [firmId], references: [id])
+  lawyerId   String?    @map("lawyer_id")
+  lawyer     Lawyer?    @relation(fields: [lawyerId], references: [id])
+  authorId   String     @map("author_id")
+  author     User       @relation(fields: [authorId], references: [id])
+  content    String
+  isPinned   Boolean    @default(false) @map("is_pinned")
+  createdAt  DateTime   @default(now()) @map("created_at")
+  updatedAt  DateTime   @updatedAt @map("updated_at")
+  deletedAt  DateTime?  @map("deleted_at")
+
+  @@map("relationship_notes")
+}
+
+model CostBenchmark {
+  id             String          @id @default(cuid())
+  firmId         String          @map("firm_id")
+  firm           Firm            @relation(fields: [firmId], references: [id])
+  lawyerId       String?         @map("lawyer_id")
+  lawyer         Lawyer?         @relation(fields: [lawyerId], references: [id])
+  role           BenchmarkRole
+  practiceAreaId String          @map("practice_area_id")
+  practiceArea   PracticeArea    @relation(fields: [practiceAreaId], references: [id])
+  jurisdictionId String          @map("jurisdiction_id")
+  jurisdiction   Jurisdiction    @relation(fields: [jurisdictionId], references: [id])
+  hourlyRateUsd  Int             @map("hourly_rate_usd") // cents
+  blendedRateUsd Int?            @map("blended_rate_usd") // cents
+  fixedFeeUsd    Int?            @map("fixed_fee_usd") // cents
+  year           Int
+  source         BenchmarkSource
+  createdById    String          @map("created_by_id")
+  createdBy      User            @relation(fields: [createdById], references: [id])
+  createdAt      DateTime        @default(now()) @map("created_at")
+  updatedAt      DateTime        @updatedAt @map("updated_at")
+
+  @@map("cost_benchmarks")
 }
