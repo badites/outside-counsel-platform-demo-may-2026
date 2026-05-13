@@ -377,6 +377,169 @@ async function main() {
   }
 
   console.log(`  Lawyers: ${lawyerData.length}`);
+
+  // ─── Ranking Sources ─────────────────────────────────────────────────
+  const rankingSources = await Promise.all([
+    prisma.rankingSource.create({ data: { name: "Chambers Asia-Pacific 2025", slug: "chambers-2025", publisher: "CHAMBERS", editionYear: 2025 } }),
+    prisma.rankingSource.create({ data: { name: "Chambers Asia-Pacific 2024", slug: "chambers-2024", publisher: "CHAMBERS", editionYear: 2024 } }),
+    prisma.rankingSource.create({ data: { name: "Legal 500 Asia Pacific 2025", slug: "legal500-2025", publisher: "LEGAL500", editionYear: 2025 } }),
+    prisma.rankingSource.create({ data: { name: "Legal 500 Asia Pacific 2024", slug: "legal500-2024", publisher: "LEGAL500", editionYear: 2024 } }),
+    prisma.rankingSource.create({ data: { name: "Benchmark Litigation Asia-Pacific 2025", slug: "benchmark-2025", publisher: "BENCHMARK_LITIGATION", editionYear: 2025 } }),
+    prisma.rankingSource.create({ data: { name: "AsiaLaw Profiles 2025", slug: "asialaw-2025", publisher: "ASIALAW", editionYear: 2025 } }),
+    prisma.rankingSource.create({ data: { name: "AsiaLaw Profiles 2024", slug: "asialaw-2024", publisher: "ASIALAW", editionYear: 2024 } }),
+  ]);
+
+  const rs: Record<string, { id: string }> = {};
+  for (const src of rankingSources) {
+    rs[src.slug] = src;
+  }
+  console.log(`  Ranking Sources: ${rankingSources.length}`);
+
+  // ─── Firm Rankings ─────────────────────────────────────────────────────
+  const firmRankingData: { firm: string; source: string; pa: string; jur: string; band?: number; tier?: number; starRating?: number }[] = [
+    // Baker McKenzie
+    { firm: "Baker", source: "chambers-2025", pa: "corporate-ma", jur: "Thailand", band: 1 },
+    { firm: "Baker", source: "chambers-2024", pa: "corporate-ma", jur: "Thailand", band: 1 },
+    { firm: "Baker", source: "chambers-2025", pa: "dispute-resolution", jur: "Thailand", band: 2 },
+    { firm: "Baker", source: "legal500-2025", pa: "corporate-ma", jur: "Thailand", tier: 1 },
+    { firm: "Baker", source: "legal500-2024", pa: "corporate-ma", jur: "Thailand", tier: 1 },
+    { firm: "Baker", source: "legal500-2025", pa: "employment-labour", jur: "Thailand", tier: 1 },
+    { firm: "Baker", source: "asialaw-2025", pa: "corporate-ma", jur: "Thailand", starRating: 5 },
+
+    // A&O
+    { firm: "A&O", source: "chambers-2025", pa: "corporate-ma", jur: "Thailand", band: 1 },
+    { firm: "A&O", source: "chambers-2024", pa: "corporate-ma", jur: "Thailand", band: 2 },
+    { firm: "A&O", source: "chambers-2025", pa: "banking-finance", jur: "Thailand", band: 1 },
+    { firm: "A&O", source: "legal500-2025", pa: "corporate-ma", jur: "Thailand", tier: 1 },
+    { firm: "A&O", source: "legal500-2025", pa: "capital-markets", jur: "Thailand", tier: 2 },
+    { firm: "A&O", source: "asialaw-2025", pa: "banking-finance", jur: "Thailand", starRating: 5 },
+
+    // Linklaters
+    { firm: "Linklaters", source: "chambers-2025", pa: "banking-finance", jur: "Thailand", band: 1 },
+    { firm: "Linklaters", source: "chambers-2025", pa: "capital-markets", jur: "Thailand", band: 2 },
+    { firm: "Linklaters", source: "legal500-2025", pa: "banking-finance", jur: "Thailand", tier: 1 },
+    { firm: "Linklaters", source: "asialaw-2025", pa: "banking-finance", jur: "Thailand", starRating: 5 },
+
+    // Tilleke & Gibbins
+    { firm: "T&G", source: "chambers-2025", pa: "intellectual-property", jur: "Thailand", band: 1 },
+    { firm: "T&G", source: "chambers-2024", pa: "intellectual-property", jur: "Thailand", band: 1 },
+    { firm: "T&G", source: "legal500-2025", pa: "intellectual-property", jur: "Thailand", tier: 1 },
+    { firm: "T&G", source: "legal500-2025", pa: "dispute-resolution", jur: "Thailand", tier: 2 },
+    { firm: "T&G", source: "asialaw-2025", pa: "intellectual-property", jur: "Thailand", starRating: 5 },
+
+    // WCP
+    { firm: "WCP", source: "chambers-2025", pa: "corporate-ma", jur: "Thailand", band: 2 },
+    { firm: "WCP", source: "chambers-2024", pa: "corporate-ma", jur: "Thailand", band: 2 },
+    { firm: "WCP", source: "legal500-2025", pa: "corporate-ma", jur: "Thailand", tier: 2 },
+    { firm: "WCP", source: "legal500-2025", pa: "banking-finance", jur: "Thailand", tier: 2 },
+    { firm: "WCP", source: "asialaw-2025", pa: "corporate-ma", jur: "Thailand", starRating: 4 },
+
+    // Chandler MHM
+    { firm: "Chandler", source: "chambers-2025", pa: "corporate-ma", jur: "Thailand", band: 3 },
+    { firm: "Chandler", source: "legal500-2025", pa: "energy-natural-resources", jur: "Thailand", tier: 2 },
+    { firm: "Chandler", source: "asialaw-2025", pa: "corporate-ma", jur: "Thailand", starRating: 4 },
+
+    // Rajah & Tann
+    { firm: "R&T", source: "chambers-2025", pa: "dispute-resolution", jur: "Singapore", band: 1 },
+    { firm: "R&T", source: "chambers-2025", pa: "corporate-ma", jur: "Singapore", band: 2 },
+    { firm: "R&T", source: "legal500-2025", pa: "dispute-resolution", jur: "Singapore", tier: 1 },
+    { firm: "R&T", source: "asialaw-2025", pa: "dispute-resolution", jur: "Singapore", starRating: 5 },
+
+    // Norton Rose Fulbright
+    { firm: "NRF", source: "chambers-2025", pa: "energy-natural-resources", jur: "Thailand", band: 2 },
+    { firm: "NRF", source: "legal500-2025", pa: "energy-natural-resources", jur: "Thailand", tier: 1 },
+    { firm: "NRF", source: "asialaw-2025", pa: "energy-natural-resources", jur: "Thailand", starRating: 4 },
+
+    // Kudun & Partners
+    { firm: "Kudun", source: "chambers-2025", pa: "corporate-ma", jur: "Thailand", band: 3 },
+    { firm: "Kudun", source: "legal500-2025", pa: "corporate-ma", jur: "Thailand", tier: 3 },
+    { firm: "Kudun", source: "legal500-2025", pa: "real-estate-construction", jur: "Thailand", tier: 2 },
+    { firm: "Kudun", source: "asialaw-2025", pa: "corporate-ma", jur: "Thailand", starRating: 3 },
+
+    // Pisut & Partners
+    { firm: "Pisut", source: "legal500-2025", pa: "corporate-ma", jur: "Thailand", tier: 4 },
+    { firm: "Pisut", source: "benchmark-2025", pa: "dispute-resolution", jur: "Thailand", starRating: 3 },
+  ];
+
+  for (const fr of firmRankingData) {
+    await prisma.firmRanking.create({
+      data: {
+        firmId: firms[fr.firm].id,
+        rankingSourceId: rs[fr.source].id,
+        practiceAreaId: pa[fr.pa].id,
+        jurisdictionId: jur[fr.jur].id,
+        band: fr.band ?? null,
+        tier: fr.tier ?? null,
+        starRating: fr.starRating ?? null,
+      },
+    });
+  }
+  console.log(`  Firm Rankings: ${firmRankingData.length}`);
+
+  // ─── Lawyer Rankings ───────────────────────────────────────────────────
+  type LRC = "LEADING" | "RECOMMENDED" | "UP_AND_COMING" | "STAR" | "RECOGNISED";
+  const lawyerRankingData: { lawyer: string; source: string; pa: string; jur: string; category: LRC }[] = [
+    // Baker
+    { lawyer: "Kullarat Phongsathaporn", source: "chambers-2025", pa: "corporate-ma", jur: "Thailand", category: "LEADING" },
+    { lawyer: "Kullarat Phongsathaporn", source: "legal500-2025", pa: "corporate-ma", jur: "Thailand", category: "LEADING" },
+    { lawyer: "Paralee Techanarong", source: "chambers-2025", pa: "dispute-resolution", jur: "Thailand", category: "RECOMMENDED" },
+    { lawyer: "Dhiraphol Suwanprateep", source: "chambers-2025", pa: "intellectual-property", jur: "Thailand", category: "LEADING" },
+    { lawyer: "Pimvimol Vipamaneerut", source: "legal500-2025", pa: "employment-labour", jur: "Thailand", category: "LEADING" },
+
+    // A&O
+    { lawyer: "Patrick Leysen", source: "chambers-2025", pa: "corporate-ma", jur: "Thailand", category: "LEADING" },
+    { lawyer: "Patrick Leysen", source: "legal500-2025", pa: "capital-markets", jur: "Thailand", category: "LEADING" },
+    { lawyer: "Montien Bunjarnondha", source: "chambers-2025", pa: "banking-finance", jur: "Thailand", category: "RECOMMENDED" },
+
+    // Linklaters
+    { lawyer: "John Frangos", source: "chambers-2025", pa: "banking-finance", jur: "Thailand", category: "LEADING" },
+    { lawyer: "John Frangos", source: "legal500-2025", pa: "banking-finance", jur: "Thailand", category: "LEADING" },
+    { lawyer: "Watcharapong Kunakorn", source: "chambers-2025", pa: "capital-markets", jur: "Thailand", category: "RECOMMENDED" },
+
+    // Tilleke & Gibbins
+    { lawyer: "Darani Vachanavuttivong", source: "chambers-2025", pa: "intellectual-property", jur: "Thailand", category: "STAR" },
+    { lawyer: "Darani Vachanavuttivong", source: "legal500-2025", pa: "intellectual-property", jur: "Thailand", category: "LEADING" },
+    { lawyer: "Alan Adcock", source: "chambers-2025", pa: "dispute-resolution", jur: "Thailand", category: "RECOMMENDED" },
+
+    // WCP
+    { lawyer: "Veeranuch Thammavaranucupt", source: "chambers-2025", pa: "corporate-ma", jur: "Thailand", category: "LEADING" },
+    { lawyer: "Veeranuch Thammavaranucupt", source: "legal500-2025", pa: "corporate-ma", jur: "Thailand", category: "LEADING" },
+    { lawyer: "Samart Poopoksakul", source: "chambers-2025", pa: "dispute-resolution", jur: "Thailand", category: "RECOMMENDED" },
+
+    // Chandler
+    { lawyer: "Albert Chandler", source: "chambers-2025", pa: "energy-natural-resources", jur: "Thailand", category: "LEADING" },
+
+    // Rajah & Tann
+    { lawyer: "Lee Eng Beng", source: "chambers-2025", pa: "dispute-resolution", jur: "Singapore", category: "STAR" },
+    { lawyer: "Lee Eng Beng", source: "legal500-2025", pa: "dispute-resolution", jur: "Singapore", category: "LEADING" },
+    { lawyer: "Rachel Eng", source: "chambers-2025", pa: "corporate-ma", jur: "Singapore", category: "LEADING" },
+    { lawyer: "Chia Kim Huat", source: "legal500-2025", pa: "corporate-ma", jur: "Singapore", category: "LEADING" },
+
+    // NRF
+    { lawyer: "Bob Kongyingyong", source: "chambers-2025", pa: "energy-natural-resources", jur: "Thailand", category: "RECOMMENDED" },
+    { lawyer: "Scott Olson", source: "legal500-2025", pa: "banking-finance", jur: "Thailand", category: "RECOMMENDED" },
+
+    // Kudun
+    { lawyer: "Kudun Sukhumananda", source: "chambers-2025", pa: "corporate-ma", jur: "Thailand", category: "RECOMMENDED" },
+    { lawyer: "Kudun Sukhumananda", source: "legal500-2025", pa: "corporate-ma", jur: "Thailand", category: "RECOMMENDED" },
+
+    // Pisut
+    { lawyer: "Pisut Rakwong", source: "legal500-2025", pa: "corporate-ma", jur: "Thailand", category: "UP_AND_COMING" },
+  ];
+
+  for (const lr of lawyerRankingData) {
+    await prisma.lawyerRanking.create({
+      data: {
+        lawyerId: lawyers[lr.lawyer].id,
+        rankingSourceId: rs[lr.source].id,
+        practiceAreaId: pa[lr.pa].id,
+        jurisdictionId: jur[lr.jur].id,
+        category: lr.category,
+      },
+    });
+  }
+  console.log(`  Lawyer Rankings: ${lawyerRankingData.length}`);
+
   console.log("Seed complete!");
 }
 

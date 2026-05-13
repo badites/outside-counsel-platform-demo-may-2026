@@ -29,6 +29,21 @@ enum LawyerRole {
   OTHER
 }
 
+enum RankingPublisher {
+  CHAMBERS
+  LEGAL500
+  BENCHMARK_LITIGATION
+  ASIALAW
+}
+
+enum LawyerRankingCategory {
+  LEADING
+  RECOMMENDED
+  UP_AND_COMING
+  STAR
+  RECOGNISED
+}
+
 // ─── Auth / Users ────────────────────────────────────────────────────────────
 
 model User {
@@ -56,6 +71,8 @@ model PracticeArea {
 
   firmPracticeAreas   FirmPracticeArea[]
   lawyerPracticeAreas LawyerPracticeArea[]
+  firmRankings        FirmRanking[]
+  lawyerRankings      LawyerRanking[]
 
   @@map("practice_areas")
 }
@@ -69,6 +86,8 @@ model Jurisdiction {
 
   firmPracticeAreas   FirmPracticeArea[]
   lawyerPracticeAreas LawyerPracticeArea[]
+  firmRankings        FirmRanking[]
+  lawyerRankings      LawyerRanking[]
 
   @@map("jurisdictions")
 }
@@ -96,6 +115,7 @@ model Firm {
 
   firmLawyers     FirmLawyer[]
   practiceAreas   FirmPracticeArea[]
+  rankings        FirmRanking[]
 
   @@map("firms")
 }
@@ -118,6 +138,7 @@ model Lawyer {
 
   firmLawyers     FirmLawyer[]
   practiceAreas   LawyerPracticeArea[]
+  rankings        LawyerRanking[]
 
   @@map("lawyers")
 }
@@ -168,4 +189,64 @@ model LawyerPracticeArea {
 
   @@unique([lawyerId, practiceAreaId, jurisdictionId])
   @@map("lawyer_practice_areas")
+}
+
+// ─── Rankings ────────────────────────────────────────────────────────────────
+
+model RankingSource {
+  id           String           @id @default(cuid())
+  name         String           @unique
+  slug         String           @unique
+  publisher    RankingPublisher
+  editionYear  Int              @map("edition_year")
+  url          String?
+  createdAt    DateTime         @default(now()) @map("created_at")
+
+  firmRankings   FirmRanking[]
+  lawyerRankings LawyerRanking[]
+
+  @@unique([publisher, editionYear])
+  @@map("ranking_sources")
+}
+
+model FirmRanking {
+  id               String        @id @default(cuid())
+  firmId           String        @map("firm_id")
+  firm             Firm          @relation(fields: [firmId], references: [id])
+  rankingSourceId  String        @map("ranking_source_id")
+  rankingSource    RankingSource @relation(fields: [rankingSourceId], references: [id])
+  practiceAreaId   String        @map("practice_area_id")
+  practiceArea     PracticeArea  @relation(fields: [practiceAreaId], references: [id])
+  jurisdictionId   String        @map("jurisdiction_id")
+  jurisdiction     Jurisdiction  @relation(fields: [jurisdictionId], references: [id])
+  band             Int?          // Chambers 1-6
+  tier             Int?          // Legal500 1-5
+  starRating       Int?          @map("star_rating") // Benchmark 1-5
+  editorialExcerpt String?      @map("editorial_excerpt")
+  url              String?
+  createdAt        DateTime     @default(now()) @map("created_at")
+  updatedAt        DateTime     @updatedAt @map("updated_at")
+
+  @@unique([firmId, rankingSourceId, practiceAreaId, jurisdictionId])
+  @@map("firm_rankings")
+}
+
+model LawyerRanking {
+  id               String                @id @default(cuid())
+  lawyerId         String                @map("lawyer_id")
+  lawyer           Lawyer                @relation(fields: [lawyerId], references: [id])
+  rankingSourceId  String                @map("ranking_source_id")
+  rankingSource    RankingSource         @relation(fields: [rankingSourceId], references: [id])
+  practiceAreaId   String                @map("practice_area_id")
+  practiceArea     PracticeArea          @relation(fields: [practiceAreaId], references: [id])
+  jurisdictionId   String                @map("jurisdiction_id")
+  jurisdiction     Jurisdiction          @relation(fields: [jurisdictionId], references: [id])
+  category         LawyerRankingCategory
+  editorialExcerpt String?              @map("editorial_excerpt")
+  url              String?
+  createdAt        DateTime             @default(now()) @map("created_at")
+  updatedAt        DateTime             @updatedAt @map("updated_at")
+
+  @@unique([lawyerId, rankingSourceId, practiceAreaId, jurisdictionId])
+  @@map("lawyer_rankings")
 }

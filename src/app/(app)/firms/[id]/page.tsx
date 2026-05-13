@@ -11,11 +11,20 @@ import {
   GitBranch,
   Briefcase,
 } from "lucide-react";
+import { Trophy } from "lucide-react";
 import { getFirmById } from "@/server/firms";
+import { getFirmRankings } from "@/server/rankings";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Badge } from "@/components/ui/Badge";
-import { FIRM_TYPE_LABELS, LAWYER_ROLE_LABELS } from "@/lib/schemas";
-import type { FirmTypeEnum } from "@/lib/schemas";
+import {
+  FIRM_TYPE_LABELS,
+  LAWYER_ROLE_LABELS,
+  RANKING_PUBLISHER_LABELS,
+  formatBand,
+  formatTier,
+  formatStars,
+} from "@/lib/schemas";
+import type { FirmTypeEnum, RankingPublisherEnum } from "@/lib/schemas";
 
 const firmTypeBadgeVariant: Record<FirmTypeEnum, "teal" | "amber" | "blue" | "gray"> = {
   FULL_SERVICE: "teal",
@@ -30,7 +39,10 @@ interface FirmDetailPageProps {
 
 export default async function FirmDetailPage({ params }: FirmDetailPageProps) {
   const { id } = await params;
-  const firm = await getFirmById(id);
+  const [firm, rankings] = await Promise.all([
+    getFirmById(id),
+    getFirmRankings(id),
+  ]);
 
   if (!firm || firm.deletedAt) {
     notFound();
@@ -245,12 +257,61 @@ export default async function FirmDetailPage({ params }: FirmDetailPageProps) {
             </div>
           )}
 
-          {/* Placeholder cards for future sessions */}
-          <div className="rounded-lg border border-dashed border-gray-200 bg-gray-50 p-6">
-            <h3 className="mb-2 text-sm font-semibold text-gray-400">
-              Rankings
+          {/* Rankings */}
+          <div className="rounded-lg border border-gray-200 bg-white p-6">
+            <h3 className="mb-4 text-sm font-semibold uppercase tracking-wider text-gray-500">
+              <Trophy size={14} className="mr-2 inline" />
+              Rankings ({rankings.length})
             </h3>
-            <p className="text-xs text-gray-400">Coming in Session 3</p>
+            {rankings.length === 0 ? (
+              <p className="text-sm text-gray-400">No rankings recorded.</p>
+            ) : (
+              <div className="space-y-3">
+                {rankings.map((r) => (
+                  <div
+                    key={r.id}
+                    className="flex items-center justify-between rounded-md border border-gray-100 p-2.5"
+                  >
+                    <div>
+                      <Badge
+                        variant={
+                          r.rankingSource.publisher === "CHAMBERS"
+                            ? "teal"
+                            : r.rankingSource.publisher === "LEGAL500"
+                            ? "blue"
+                            : r.rankingSource.publisher === "BENCHMARK_LITIGATION"
+                            ? "amber"
+                            : "green"
+                        }
+                      >
+                        {RANKING_PUBLISHER_LABELS[r.rankingSource.publisher as RankingPublisherEnum]}{" "}
+                        {r.rankingSource.editionYear}
+                      </Badge>
+                      <p className="mt-1 text-xs text-gray-500">
+                        {r.practiceArea.name}
+                      </p>
+                    </div>
+                    <div className="text-right">
+                      {r.band != null && (
+                        <span className="text-sm font-medium text-teal-700">
+                          {formatBand(r.band)}
+                        </span>
+                      )}
+                      {r.tier != null && (
+                        <span className="text-sm font-medium text-blue-700">
+                          {formatTier(r.tier)}
+                        </span>
+                      )}
+                      {r.starRating != null && (
+                        <span className="text-sm text-amber-500">
+                          {formatStars(r.starRating)}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
           <div className="rounded-lg border border-dashed border-gray-200 bg-gray-50 p-6">

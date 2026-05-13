@@ -22,6 +22,23 @@ export type LawyerRoleEnum = z.infer<typeof lawyerRoleEnum>;
 export const regionEnum = z.enum(["APAC", "EMEA", "AMERICAS", "GLOBAL"]);
 export type RegionEnum = z.infer<typeof regionEnum>;
 
+export const rankingPublisherEnum = z.enum([
+  "CHAMBERS",
+  "LEGAL500",
+  "BENCHMARK_LITIGATION",
+  "ASIALAW",
+]);
+export type RankingPublisherEnum = z.infer<typeof rankingPublisherEnum>;
+
+export const lawyerRankingCategoryEnum = z.enum([
+  "LEADING",
+  "RECOMMENDED",
+  "UP_AND_COMING",
+  "STAR",
+  "RECOGNISED",
+]);
+export type LawyerRankingCategoryEnum = z.infer<typeof lawyerRankingCategoryEnum>;
+
 // ─── Firm schemas ────────────────────────────────────────────────────────────
 
 export const createFirmSchema = z.object({
@@ -128,3 +145,102 @@ export const LAWYER_ROLE_LABELS: Record<LawyerRoleEnum, string> = {
   COUNSEL: "Counsel",
   OTHER: "Other",
 };
+
+export const RANKING_PUBLISHER_LABELS: Record<RankingPublisherEnum, string> = {
+  CHAMBERS: "Chambers",
+  LEGAL500: "Legal 500",
+  BENCHMARK_LITIGATION: "Benchmark Litigation",
+  ASIALAW: "AsiaLaw",
+};
+
+export const LAWYER_RANKING_CATEGORY_LABELS: Record<LawyerRankingCategoryEnum, string> = {
+  LEADING: "Leading",
+  RECOMMENDED: "Recommended",
+  UP_AND_COMING: "Up & Coming",
+  STAR: "Star",
+  RECOGNISED: "Recognised",
+};
+
+// ─── Ranking schemas ─────────────────────────────────────────────────────────
+
+export const createRankingSourceSchema = z.object({
+  name: z.string().min(1, "Name is required").max(200),
+  publisher: rankingPublisherEnum,
+  editionYear: z.coerce.number().int().min(2000).max(new Date().getFullYear() + 1),
+  url: z.string().url().optional().or(z.literal("")),
+});
+
+export type CreateRankingSourceInput = z.infer<typeof createRankingSourceSchema>;
+
+export const createFirmRankingSchema = z.object({
+  firmId: z.string().min(1, "Firm is required"),
+  rankingSourceId: z.string().min(1, "Source is required"),
+  practiceAreaId: z.string().min(1, "Practice area is required"),
+  jurisdictionId: z.string().min(1, "Jurisdiction is required"),
+  band: z.coerce.number().int().min(1).max(6).optional(),
+  tier: z.coerce.number().int().min(1).max(5).optional(),
+  starRating: z.coerce.number().int().min(1).max(5).optional(),
+  editorialExcerpt: z.string().max(2000).optional(),
+  url: z.string().url().optional().or(z.literal("")),
+});
+
+export type CreateFirmRankingInput = z.infer<typeof createFirmRankingSchema>;
+
+export const createLawyerRankingSchema = z.object({
+  lawyerId: z.string().min(1, "Lawyer is required"),
+  rankingSourceId: z.string().min(1, "Source is required"),
+  practiceAreaId: z.string().min(1, "Practice area is required"),
+  jurisdictionId: z.string().min(1, "Jurisdiction is required"),
+  category: lawyerRankingCategoryEnum,
+  editorialExcerpt: z.string().max(2000).optional(),
+  url: z.string().url().optional().or(z.literal("")),
+});
+
+export type CreateLawyerRankingInput = z.infer<typeof createLawyerRankingSchema>;
+
+export const rankingFilterSchema = z.object({
+  publisher: rankingPublisherEnum.optional(),
+  practiceAreaId: z.string().optional(),
+  jurisdictionId: z.string().optional(),
+  editionYear: z.coerce.number().int().optional(),
+});
+
+export type RankingFilterInput = z.infer<typeof rankingFilterSchema>;
+
+// ─── Ranking display helpers ─────────────────────────────────────────────────
+
+/** Chambers bands: 1 = best */
+export function formatBand(band: number): string {
+  return `Band ${band}`;
+}
+
+/** Legal 500 tiers: 1 = best */
+export function formatTier(tier: number): string {
+  return `Tier ${tier}`;
+}
+
+/** Star ratings for Benchmark */
+export function formatStars(rating: number): string {
+  return "★".repeat(rating) + "☆".repeat(5 - rating);
+}
+
+/** Badge variant based on ranking quality */
+export function rankingBadgeVariant(
+  publisher: RankingPublisherEnum,
+  value: number
+): "green" | "teal" | "blue" | "amber" | "gray" {
+  if (publisher === "CHAMBERS") {
+    if (value <= 2) return "green";
+    if (value <= 4) return "teal";
+    return "gray";
+  }
+  if (publisher === "LEGAL500") {
+    if (value <= 2) return "green";
+    if (value <= 3) return "teal";
+    return "gray";
+  }
+  // Benchmark / AsiaLaw star ratings (higher = better)
+  if (value >= 4) return "green";
+  if (value >= 3) return "teal";
+  return "gray";
+}
