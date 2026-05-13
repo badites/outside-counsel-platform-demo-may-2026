@@ -20,10 +20,14 @@ import {
   getLawyerEngagements,
   getLawyerNotes,
 } from "@/server/insights";
+import { listPracticeAreas } from "@/server/reference-data";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Badge } from "@/components/ui/Badge";
 import { NpsBadge, NpsBreakdown } from "@/components/ui/NpsBadge";
 import { RatingAverages } from "@/components/ui/StarRating";
+import { NpsForm } from "@/components/insights/NpsForm";
+import { RatingForm } from "@/components/insights/RatingForm";
+import { NoteForm } from "@/components/insights/NoteForm";
 import {
   LAWYER_ROLE_LABELS,
   RANKING_PUBLISHER_LABELS,
@@ -39,7 +43,7 @@ export default async function LawyerDetailPage({
   params,
 }: LawyerDetailPageProps) {
   const { id } = await params;
-  const [lawyer, rankings, nps, internalRatings, engagements, notes] =
+  const [lawyer, rankings, nps, internalRatings, engagements, notes, allPracticeAreas] =
     await Promise.all([
       getLawyerById(id),
       getLawyerRankings(id),
@@ -47,6 +51,7 @@ export default async function LawyerDetailPage({
       getLawyerInternalRatings(id),
       getLawyerEngagements(id),
       getLawyerNotes(id),
+      listPracticeAreas(),
     ]);
 
   if (!lawyer || lawyer.deletedAt) {
@@ -326,16 +331,25 @@ export default async function LawyerDetailPage({
                 <RatingAverages ratings={internalRatings} />
               </div>
             )}
+
+            <div className="mt-4 border-t border-gray-100 pt-4 space-y-3">
+              <NpsForm
+                targetType="LAWYER"
+                targetId={id}
+                practiceAreas={allPracticeAreas.map((pa) => ({ id: pa.id, name: pa.name }))}
+              />
+              <RatingForm targetType="LAWYER" targetId={id} />
+            </div>
           </div>
 
           {/* Notes */}
-          {notes.length > 0 && (
-            <div className="rounded-lg border border-gray-200 bg-white p-6">
-              <h3 className="mb-4 text-sm font-semibold uppercase tracking-wider text-gray-500">
-                <MessageSquare size={14} className="mr-2 inline" />
-                Notes ({notes.length})
-              </h3>
-              <div className="space-y-3">
+          <div className="rounded-lg border border-gray-200 bg-white p-6">
+            <h3 className="mb-4 text-sm font-semibold uppercase tracking-wider text-gray-500">
+              <MessageSquare size={14} className="mr-2 inline" />
+              Notes ({notes.length})
+            </h3>
+            {notes.length > 0 && (
+              <div className="space-y-3 mb-4">
                 {notes.map((note) => (
                   <div
                     key={note.id}
@@ -356,8 +370,9 @@ export default async function LawyerDetailPage({
                   </div>
                 ))}
               </div>
-            </div>
-          )}
+            )}
+            <NoteForm targetType="LAWYER" targetId={id} />
+          </div>
         </div>
       </div>
 

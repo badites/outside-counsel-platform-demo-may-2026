@@ -251,6 +251,43 @@ export const directoryFilterSchema = z.object({
 
 export type DirectoryFilterInput = z.infer<typeof directoryFilterSchema>;
 
+// ─── Internal Insights schemas ──────────────────────────────────────────────
+
+export const createRecommendationSchema = z.object({
+  targetType: z.enum(["FIRM", "LAWYER"]),
+  firmId: z.string().optional(),
+  lawyerId: z.string().optional(),
+  npsScore: z.coerce.number().int().min(0).max(10),
+  practiceAreaId: z.string().optional(),
+  reason: z.string().max(1000).optional(),
+});
+
+export type CreateRecommendationInput = z.infer<typeof createRecommendationSchema>;
+
+export const createInternalRatingSchema = z.object({
+  targetType: z.enum(["FIRM", "LAWYER"]),
+  firmId: z.string().optional(),
+  lawyerId: z.string().optional(),
+  responsiveness: z.coerce.number().int().min(1).max(5),
+  quality: z.coerce.number().int().min(1).max(5),
+  commercialAwareness: z.coerce.number().int().min(1).max(5),
+  value: z.coerce.number().int().min(1).max(5),
+  subjectMatterExpertise: z.coerce.number().int().min(1).max(5),
+  comment: z.string().max(2000).optional(),
+});
+
+export type CreateInternalRatingInput = z.infer<typeof createInternalRatingSchema>;
+
+export const createNoteSchema = z.object({
+  targetType: z.enum(["FIRM", "LAWYER"]),
+  firmId: z.string().optional(),
+  lawyerId: z.string().optional(),
+  content: z.string().min(1, "Note content is required").max(5000),
+  isPinned: z.coerce.boolean().default(false),
+});
+
+export type CreateNoteInput = z.infer<typeof createNoteSchema>;
+
 // ─── Ranking display helpers ─────────────────────────────────────────────────
 
 /** Chambers bands: 1 = best */
