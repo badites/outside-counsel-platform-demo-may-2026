@@ -10,6 +10,7 @@ import {
   Briefcase,
   GitBranch,
   Settings,
+  Shield,
   ChevronLeft,
   ChevronRight,
 } from "lucide-react";
@@ -24,6 +25,10 @@ const navItems = [
   { label: "Engagements", href: "/engagements", icon: Briefcase },
   { label: "Network", href: "/network", icon: GitBranch },
   { label: "Settings", href: "/settings", icon: Settings },
+];
+
+const adminItems = [
+  { label: "Manage Rankings", href: "/admin/rankings", icon: Shield },
 ];
 
 export function Sidebar() {
@@ -73,6 +78,34 @@ export function Sidebar() {
           );
         })}
       </nav>
+
+      <div className="border-t border-gray-200 px-2 py-3">
+        {!collapsed && (
+          <p className="mb-2 px-3 text-[10px] font-semibold uppercase tracking-wider text-gray-400">
+            Admin
+          </p>
+        )}
+        {adminItems.map((item) => {
+          const isActive =
+            pathname === item.href || pathname.startsWith(item.href + "/");
+          const Icon = item.icon;
+          return (
+            <Link
+              key={item.href}
+              href={item.href}
+              className={cn(
+                "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
+                isActive
+                  ? "bg-teal-50 text-teal-700"
+                  : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"
+              )}
+            >
+              <Icon size={18} />
+              {!collapsed && <span>{item.label}</span>}
+            </Link>
+          );
+        })}
+      </div>
     </aside>
   );
 }
