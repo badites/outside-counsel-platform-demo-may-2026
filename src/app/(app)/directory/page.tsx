@@ -2,7 +2,7 @@ import Link from "next/link";
 import { Sparkles, Building2, Users, Trophy, Star, Briefcase } from "lucide-react";
 import { Suspense } from "react";
 import { getCurrentUser } from "@/server/current-user";
-import { getUserPreference } from "@/server/preferences";
+import { getUserPreference, hasUserPreference } from "@/server/preferences";
 import { scoreFirms, scoreLawyers } from "@/server/scoring";
 import { listPracticeAreas, listJurisdictions } from "@/server/reference-data";
 import { DirectoryFilters } from "@/components/directory/DirectoryFilters";
@@ -27,8 +27,9 @@ export default async function DirectoryPage({ searchParams }: DirectoryPageProps
   const minNps = params.minNps ? Number(params.minNps) : undefined;
 
   const user = await getCurrentUser();
-  const weights = await getUserPreference(user.id);
-  const [practiceAreas, jurisdictions] = await Promise.all([
+  const [weights, hasPrefs, practiceAreas, jurisdictions] = await Promise.all([
+    getUserPreference(user.id),
+    hasUserPreference(user.id),
     listPracticeAreas(),
     listJurisdictions(),
   ]);
@@ -50,6 +51,32 @@ export default async function DirectoryPage({ searchParams }: DirectoryPageProps
           </Link>
         }
       />
+
+      {!hasPrefs && (
+        <div className="mb-6 rounded-lg border border-teal-200 bg-teal-50 p-4">
+          <div className="flex items-start gap-3">
+            <Sparkles size={20} className="mt-0.5 text-teal-600" />
+            <div className="flex-1">
+              <h3 className="text-sm font-semibold text-teal-800">
+                Welcome! Tell us what matters most to you
+              </h3>
+              <p className="mt-1 text-xs text-teal-700">
+                The directory ranks firms and lawyers using a personalized fit
+                score. Set your weights to prioritize what you value most —
+                responsiveness, quality, cost efficiency, expertise, or peer
+                sentiment.
+              </p>
+              <Link
+                href="/settings"
+                className="mt-2 inline-flex items-center gap-1.5 rounded-md bg-teal-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-teal-700"
+              >
+                <Sparkles size={14} />
+                Set Your Preferences
+              </Link>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="mb-6">
         <Suspense fallback={null}>

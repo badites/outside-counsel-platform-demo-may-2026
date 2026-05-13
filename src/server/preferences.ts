@@ -19,6 +19,11 @@ const DEFAULT_WEIGHTS: UserWeights = {
   weightNps: 1.0,
 };
 
+export async function hasUserPreference(userId: string): Promise<boolean> {
+  const count = await prisma.userPreference.count({ where: { userId } });
+  return count > 0;
+}
+
 export async function getUserPreference(userId: string): Promise<UserWeights> {
   const pref = await prisma.userPreference.findUnique({
     where: { userId },
