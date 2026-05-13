@@ -1,0 +1,78 @@
+"use client";
+
+import Link from "next/link";
+import { usePathname } from "next/navigation";
+import {
+  Home,
+  Building2,
+  Users,
+  Trophy,
+  Briefcase,
+  GitBranch,
+  Settings,
+  ChevronLeft,
+  ChevronRight,
+} from "lucide-react";
+import { useState } from "react";
+import { cn } from "@/lib/utils";
+
+const navItems = [
+  { label: "Directory", href: "/directory", icon: Home },
+  { label: "Firms", href: "/firms", icon: Building2 },
+  { label: "Lawyers", href: "/lawyers", icon: Users },
+  { label: "Rankings", href: "/rankings", icon: Trophy },
+  { label: "Engagements", href: "/engagements", icon: Briefcase },
+  { label: "Network", href: "/network", icon: GitBranch },
+  { label: "Settings", href: "/settings", icon: Settings },
+];
+
+export function Sidebar() {
+  const pathname = usePathname();
+  const [collapsed, setCollapsed] = useState(false);
+
+  return (
+    <aside
+      className={cn(
+        "flex flex-col border-r border-gray-200 bg-white transition-all duration-200",
+        collapsed ? "w-16" : "w-60"
+      )}
+    >
+      <div className="flex h-14 items-center justify-between border-b border-gray-200 px-4">
+        {!collapsed && (
+          <span className="text-sm font-semibold text-teal-700">
+            Counsel Directory
+          </span>
+        )}
+        <button
+          onClick={() => setCollapsed(!collapsed)}
+          className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
+        >
+          {collapsed ? <ChevronRight size={16} /> : <ChevronLeft size={16} />}
+        </button>
+      </div>
+
+      <nav className="flex-1 space-y-1 px-2 py-3">
+        {navItems.map((item) => {
+          const isActive =
+            pathname === item.href || pathname.startsWith(item.href + "/");
+          const Icon = item.icon;
+          return (
+            <Link
+              key={item.href}
+              href={item.href}
+              className={cn(
+                "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
+                isActive
+                  ? "bg-teal-50 text-teal-700"
+                  : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"
+              )}
+            >
+              <Icon size={18} />
+              {!collapsed && <span>{item.label}</span>}
+            </Link>
+          );
+        })}
+      </nav>
+    </aside>
+  );
+}
