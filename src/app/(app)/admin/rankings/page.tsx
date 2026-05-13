@@ -1,8 +1,9 @@
 import Link from "next/link";
-import { Trophy, Plus, Building2, Users } from "lucide-react";
+import { Trophy, Plus, Building2, Users, Download } from "lucide-react";
 import { listRankingSources } from "@/server/rankings";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Badge } from "@/components/ui/Badge";
+import { CsvImportForm } from "@/components/admin/CsvImportForm";
 import { RANKING_PUBLISHER_LABELS } from "@/lib/schemas";
 import type { RankingPublisherEnum } from "@/lib/schemas";
 
@@ -51,6 +52,27 @@ export default async function AdminRankingsPage() {
           </div>
         }
       />
+
+      {/* CSV Import/Export */}
+      <div className="mb-6 grid gap-4 md:grid-cols-2">
+        <CsvImportForm />
+        <div className="rounded-lg border border-gray-200 bg-white p-6">
+          <h3 className="mb-2 text-sm font-semibold text-gray-900">
+            Export Firm Data
+          </h3>
+          <p className="mb-4 text-xs text-gray-500">
+            Download a CSV of all firms with rankings, NPS, ratings, and
+            engagement data.
+          </p>
+          <a
+            href="/api/export/firms"
+            className="inline-flex items-center gap-2 rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+          >
+            <Download size={14} />
+            Export Firms CSV
+          </a>
+        </div>
+      </div>
 
       {sources.length === 0 ? (
         <div className="flex flex-col items-center justify-center rounded-lg border border-dashed border-gray-300 bg-white px-6 py-12 text-center">
