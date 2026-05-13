@@ -1,0 +1,24 @@
+{
+  "name": "@scg/counsel-directory-mcp",
+  "version": "1.0.0",
+  "description": "MCP server for SCG Outside Counsel Directory — exposes law firm and lawyer data as Claude tools",
+  "type": "module",
+  "main": "dist/mcp-server/src/index.js",
+  "bin": {
+    "counsel-directory-mcp": "dist/mcp-server/src/index.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/mcp-server/src/index.js",
+    "dev": "tsx src/index.ts"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.12.1",
+    "@prisma/adapter-libsql": "^7.8.0",
+    "zod": "^3.25.32"
+  },
+  "devDependencies": {
+    "tsx": "^4.19.4",
+    "typescript": "^5.8.3"
+  }
+}
