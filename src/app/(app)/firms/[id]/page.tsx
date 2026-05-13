@@ -19,6 +19,7 @@ import {
   getFirmInternalRatings,
   getFirmEngagements,
   getFirmNotes,
+  getFirmCostBenchmarks,
 } from "@/server/insights";
 import { listPracticeAreas, listJurisdictions } from "@/server/reference-data";
 import { PageHeader } from "@/components/ui/PageHeader";
@@ -34,11 +35,13 @@ import {
   FIRM_TYPE_LABELS,
   LAWYER_ROLE_LABELS,
   RANKING_PUBLISHER_LABELS,
+  BENCHMARK_ROLE_LABELS,
+  BENCHMARK_SOURCE_LABELS,
   formatBand,
   formatTier,
   formatStars,
 } from "@/lib/schemas";
-import type { FirmTypeEnum, RankingPublisherEnum } from "@/lib/schemas";
+import type { FirmTypeEnum, RankingPublisherEnum, BenchmarkRoleEnum, BenchmarkSourceEnum } from "@/lib/schemas";
 
 const firmTypeBadgeVariant: Record<FirmTypeEnum, "teal" | "amber" | "blue" | "gray"> = {
   FULL_SERVICE: "teal",
@@ -53,7 +56,7 @@ interface FirmDetailPageProps {
 
 export default async function FirmDetailPage({ params }: FirmDetailPageProps) {
   const { id } = await params;
-  const [firm, rankings, nps, internalRatings, engagements, notes, allPracticeAreas, allJurisdictions] =
+  const [firm, rankings, nps, internalRatings, engagements, notes, costBenchmarks, allPracticeAreas, allJurisdictions] =
     await Promise.all([
       getFirmById(id),
       getFirmRankings(id),
@@ -61,6 +64,7 @@ export default async function FirmDetailPage({ params }: FirmDetailPageProps) {
       getFirmInternalRatings(id),
       getFirmEngagements(id),
       getFirmNotes(id),
+      getFirmCostBenchmarks(id),
       listPracticeAreas(),
       listJurisdictions(),
     ]);
@@ -480,6 +484,62 @@ export default async function FirmDetailPage({ params }: FirmDetailPageProps) {
           </div>
         </div>
       </div>
+
+      {/* Cost Benchmarks — full width */}
+      {costBenchmarks.length > 0 && (
+        <div className="mt-6 rounded-lg border border-gray-200 bg-white p-6">
+          <h3 className="mb-4 text-sm font-semibold uppercase tracking-wider text-gray-500">
+            <DollarSign size={14} className="mr-2 inline" />
+            Cost Benchmarks ({costBenchmarks.length})
+          </h3>
+          <div className="overflow-x-auto">
+            <table className="min-w-full divide-y divide-gray-200">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th className="px-3 py-2 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Role</th>
+                  <th className="px-3 py-2 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Practice Area</th>
+                  <th className="px-3 py-2 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Jurisdiction</th>
+                  <th className="px-3 py-2 text-right text-xs font-medium uppercase tracking-wider text-gray-500">Hourly</th>
+                  <th className="px-3 py-2 text-right text-xs font-medium uppercase tracking-wider text-gray-500">Blended</th>
+                  <th className="px-3 py-2 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Source</th>
+                  <th className="px-3 py-2 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Year</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {costBenchmarks.map((cb) => (
+                  <tr key={cb.id} className="hover:bg-gray-50">
+                    <td className="px-3 py-2 text-sm text-gray-900">
+                      {BENCHMARK_ROLE_LABELS[cb.role as BenchmarkRoleEnum]}
+                    </td>
+                    <td className="px-3 py-2 text-sm text-gray-600">
+                      {cb.practiceArea.name}
+                    </td>
+                    <td className="px-3 py-2 text-sm text-gray-600">
+                      {cb.jurisdiction.name}
+                    </td>
+                    <td className="px-3 py-2 text-right text-sm text-gray-900">
+                      ${(cb.hourlyRateUsd / 100).toLocaleString()}/hr
+                    </td>
+                    <td className="px-3 py-2 text-right text-sm text-gray-600">
+                      {cb.blendedRateUsd != null
+                        ? `$${(cb.blendedRateUsd / 100).toLocaleString()}/hr`
+                        : "-"}
+                    </td>
+                    <td className="px-3 py-2">
+                      <Badge variant={cb.source === "ACTUAL" ? "green" : cb.source === "PROPOSED" ? "amber" : "blue"}>
+                        {BENCHMARK_SOURCE_LABELS[cb.source as BenchmarkSourceEnum]}
+                      </Badge>
+                    </td>
+                    <td className="px-3 py-2 text-sm text-gray-500">
+                      {cb.year}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

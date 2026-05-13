@@ -135,3 +135,18 @@ export async function listEngagements() {
     orderBy: { startDate: "desc" },
   });
 }
+
+// ─── Cost Benchmarks ──────────────────────────────────────────────────────
+
+export async function getFirmCostBenchmarks(firmId: string) {
+  return prisma.costBenchmark.findMany({
+    where: { firmId },
+    include: {
+      practiceArea: { select: { id: true, name: true } },
+      jurisdiction: { select: { id: true, name: true } },
+      lawyer: { select: { id: true, name: true } },
+      createdBy: { select: { name: true } },
+    },
+    orderBy: [{ year: "desc" }, { role: "asc" }],
+  });
+}
