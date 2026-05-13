@@ -6,6 +6,7 @@ import { getUserPreference, hasUserPreference } from "@/server/preferences";
 import { scoreFirms, scoreLawyers } from "@/server/scoring";
 import { listPracticeAreas, listJurisdictions } from "@/server/reference-data";
 import { DirectoryFilters } from "@/components/directory/DirectoryFilters";
+import { AiSearchChat } from "@/components/directory/AiSearchChat";
 import { ScoreBadge } from "@/components/directory/ScoreBadge";
 import { NpsBadge } from "@/components/ui/NpsBadge";
 import { Badge } from "@/components/ui/Badge";
@@ -77,6 +78,10 @@ export default async function DirectoryPage({ searchParams }: DirectoryPageProps
           </div>
         </div>
       )}
+
+      <div className="mb-6">
+        <AiSearchChat />
+      </div>
 
       <div className="mb-6">
         <Suspense fallback={null}>
