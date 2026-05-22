@@ -13,15 +13,17 @@ if (process.env.NODE_ENV !== "production") {
 
 export const DEFAULT_MODEL = "claude-sonnet-4-6";
 
+const ENV_KEY_NAME = "ANTHROPIC_API_KEY";
+
 export function hasServerApiKey(): boolean {
-  return !!process.env.ANTHROPIC_API_KEY;
+  return !!process.env[ENV_KEY_NAME];
 }
 
 export function getClient(requestApiKey?: string): Anthropic {
   if (requestApiKey) {
     return new Anthropic({ apiKey: requestApiKey });
   }
-  if (process.env.ANTHROPIC_API_KEY) {
+  if (process.env[ENV_KEY_NAME]) {
     return anthropic;
   }
   throw new Error("No Anthropic API key configured. Set ANTHROPIC_API_KEY or provide your own key in Settings.");
