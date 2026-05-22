@@ -185,7 +185,7 @@ async function main() {
     const firm = await prisma.firm.upsert({
       where: { id: fd.name }, // will not match — create path
       update: {},
-      create: fd,
+      create: { ...fd, panelStatus: "ACTIVE" as const },
     });
     firms[fd.shortName ?? fd.name] = firm;
   }
@@ -706,6 +706,62 @@ async function main() {
     },
   });
   console.log("  User Preferences: 2");
+
+  // ─── Entities & Cost Centers ─────────────────────────────────────────────
+  const entityData = [
+    { name: "The Siam Cement Public Company Limited", shortName: "SCC", country: "Thailand" },
+    { name: "SCG International Corporation Co., Ltd.", shortName: "SCGi", country: "Thailand" },
+    { name: "SCG Chemicals Public Company Limited", shortName: "SCGC", country: "Thailand" },
+    { name: "SCG Packaging Public Company Limited", shortName: "SCGP", country: "Thailand" },
+    { name: "SCG Cement-Building Materials Co., Ltd.", shortName: "SCG CBM", country: "Thailand" },
+    { name: "SCG Decor Public Company Limited", shortName: "SCG Decor", country: "Thailand" },
+    { name: "SCG Legal Counsel Limited", shortName: "SCG Legal", country: "Thailand" },
+    { name: "SCG Cleanergy Co., Ltd.", shortName: "SCG Cleanergy", country: "Thailand" },
+    { name: "SCG Smart Living Co., Ltd.", shortName: "SCG Smart Living", country: "Thailand" },
+  ];
+
+  const entities: Record<string, { id: string }> = {};
+  for (const ed of entityData) {
+    const entity = await prisma.entity.upsert({
+      where: { name: ed.name },
+      update: {},
+      create: ed,
+    });
+    entities[ed.shortName] = entity;
+  }
+  console.log(`  Entities: ${entityData.length}`);
+
+  const costCenterData = [
+    { code: "7040", name: "Legal — General Counsel", entityShortName: "SCG Legal" },
+    { code: "7041", name: "Legal — Litigation", entityShortName: "SCG Legal" },
+    { code: "7042", name: "Legal — IP & Technology", entityShortName: "SCG Legal" },
+    { code: "7043", name: "Legal — Compliance", entityShortName: "SCG Legal" },
+    { code: "5010", name: "Procurement — Chemical", entityShortName: "SCGC" },
+    { code: "5011", name: "Procurement — Packaging", entityShortName: "SCGP" },
+    { code: "5020", name: "Business Development — CBM", entityShortName: "SCG CBM" },
+    { code: "5021", name: "Business Development — Decor", entityShortName: "SCG Decor" },
+    { code: "3010", name: "Treasury — Group", entityShortName: "SCC" },
+    { code: "3011", name: "Treasury — International", entityShortName: "SCGi" },
+    { code: "6010", name: "HR & Labour Relations", entityShortName: "SCC" },
+    { code: "6011", name: "HR — Chemicals Division", entityShortName: "SCGC" },
+    { code: "8010", name: "Corporate Planning — Group", entityShortName: "SCC" },
+    { code: "8011", name: "Corporate Planning — International", entityShortName: "SCGi" },
+    { code: "9010", name: "Sustainability & Clean Energy", entityShortName: "SCG Cleanergy" },
+    { code: "9020", name: "Smart Living R&D", entityShortName: "SCG Smart Living" },
+  ];
+
+  for (const cc of costCenterData) {
+    await prisma.costCenter.upsert({
+      where: { code: cc.code },
+      update: {},
+      create: {
+        code: cc.code,
+        name: cc.name,
+        entityId: entities[cc.entityShortName].id,
+      },
+    });
+  }
+  console.log(`  Cost Centers: ${costCenterData.length}`);
 
   console.log("Seed complete!");
 }

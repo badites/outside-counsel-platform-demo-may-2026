@@ -7,6 +7,7 @@ export const firmTypeEnum = z.enum([
   "BOUTIQUE",
   "MID_SIZE",
   "REGIONAL",
+  "ALSP",
 ]);
 export type FirmTypeEnum = z.infer<typeof firmTypeEnum>;
 
@@ -136,6 +137,7 @@ export const FIRM_TYPE_LABELS: Record<FirmTypeEnum, string> = {
   BOUTIQUE: "Boutique",
   MID_SIZE: "Mid-Size",
   REGIONAL: "Regional",
+  ALSP: "ALSP",
 };
 
 export const LAWYER_ROLE_LABELS: Record<LawyerRoleEnum, string> = {

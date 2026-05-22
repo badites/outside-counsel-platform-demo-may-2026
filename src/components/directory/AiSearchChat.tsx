@@ -1,8 +1,25 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import Link from "next/link";
-import { Send, Bot, User, Loader2, Sparkles, X, MessageSquare } from "lucide-react";
+import { useRouter } from "next/navigation";
+import {
+  Send,
+  Bot,
+  User,
+  Loader2,
+  Sparkles,
+  X,
+  MessageSquare,
+  ListChecks,
+  Plus,
+  Trash2,
+  ArrowRight,
+  FileText,
+  Wand2,
+} from "lucide-react";
+
+// ─── Types ──────────────────────────────────────────────────────────────────
 
 type Message = {
   id: string;
@@ -11,43 +28,175 @@ type Message = {
   timestamp: Date;
 };
 
+type ShortlistFirm = {
+  id: string;
+  name: string;
+  shortName: string | null;
+  country: string;
+  city: string | null;
+  invitationId: string;
+};
+
+type ActionButton = {
+  type: string;
+  param?: string;
+  label: string;
+};
+
+// ─── Parsing helpers ────────────────────────────────────────────────────────
+
+const ACTION_RE = /^\{\{(\w+)(?::([^}]*))?\}\}\s*$/;
+
+function parseActionLine(line: string): ActionButton | null {
+  const m = line.trim().match(ACTION_RE);
+  if (!m) return null;
+  const type = m[1];
+  const parts = m[2]?.split(":") ?? [];
+
+  switch (type) {
+    case "add_shortlist":
+      return {
+        type: "add_shortlist",
+        param: parts[0],
+        label: parts.slice(1).join(":") || "Add to Shortlist",
+      };
+    case "view_shortlist":
+      return { type: "view_shortlist", label: "View Shortlist" };
+    case "approve_shortlist":
+      return { type: "approve_shortlist", label: "Approve Shortlist & Send RFP" };
+    case "rfp_wizard":
+      return { type: "rfp_wizard", label: "Use RFP Wizard (Step-by-Step)" };
+    case "rfp_ai":
+      return { type: "rfp_ai", label: "Use AI RFP Assistant" };
+    default:
+      return null;
+  }
+}
+
 function parseResultLinks(text: string): React.ReactNode[] {
-  // Parse markdown-style links: [text](/path) and bold **text**
   const parts: React.ReactNode[] = [];
   let remaining = text;
   let key = 0;
 
   while (remaining.length > 0) {
-    // Check for markdown links
     const linkMatch = remaining.match(/\[([^\]]+)\]\(([^)]+)\)/);
-    if (linkMatch && linkMatch.index !== undefined) {
-      // Add text before the link
+    const boldMatch = remaining.match(/\*\*([^*]+)\*\*/);
+
+    const linkIdx = linkMatch?.index ?? Infinity;
+    const boldIdx = boldMatch?.index ?? Infinity;
+
+    if (linkIdx === Infinity && boldIdx === Infinity) {
+      parts.push(<span key={key++}>{remaining}</span>);
+      break;
+    }
+
+    if (linkIdx <= boldIdx && linkMatch && linkMatch.index !== undefined) {
       if (linkMatch.index > 0) {
         parts.push(
           <span key={key++}>{remaining.slice(0, linkMatch.index)}</span>
         );
       }
-      // Add the link
-      parts.push(
-        <Link
-          key={key++}
-          href={linkMatch[2]}
-          className="font-medium text-teal-700 underline hover:text-teal-900"
-        >
-          {linkMatch[1]}
-        </Link>
-      );
+      const href = linkMatch[2];
+      const isExternal = href.startsWith("http");
+      if (isExternal) {
+        parts.push(
+          <a
+            key={key++}
+            href={href}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="font-medium text-blue-600 underline hover:text-blue-800"
+          >
+            {linkMatch[1]}
+          </a>
+        );
+      } else {
+        parts.push(
+          <Link
+            key={key++}
+            href={href}
+            className="font-medium text-teal-700 underline hover:text-teal-900"
+          >
+            {linkMatch[1]}
+          </Link>
+        );
+      }
       remaining = remaining.slice(linkMatch.index + linkMatch[0].length);
-    } else {
-      parts.push(<span key={key++}>{remaining}</span>);
-      break;
+    } else if (boldMatch && boldMatch.index !== undefined) {
+      if (boldMatch.index > 0) {
+        parts.push(
+          <span key={key++}>{remaining.slice(0, boldMatch.index)}</span>
+        );
+      }
+      parts.push(
+        <strong key={key++} className="font-semibold text-gray-900">
+          {parseResultLinks(boldMatch[1])}
+        </strong>
+      );
+      remaining = remaining.slice(boldMatch.index + boldMatch[0].length);
     }
   }
 
   return parts;
 }
 
-function MessageBubble({ message }: { message: Message }) {
+// ─── Action button component ────────────────────────────────────────────────
+
+function ActionButtonUI({
+  action,
+  onAction,
+  disabled,
+}: {
+  action: ActionButton;
+  onAction: (action: ActionButton) => void;
+  disabled?: boolean;
+}) {
+  const iconMap: Record<string, React.ReactNode> = {
+    add_shortlist: <Plus size={14} />,
+    view_shortlist: <ListChecks size={14} />,
+    approve_shortlist: <ArrowRight size={14} />,
+    rfp_wizard: <FileText size={14} />,
+    rfp_ai: <Wand2 size={14} />,
+  };
+
+  const styleMap: Record<string, string> = {
+    add_shortlist:
+      "border-teal-300 bg-teal-50 text-teal-700 hover:bg-teal-100",
+    view_shortlist:
+      "border-gray-300 bg-gray-50 text-gray-700 hover:bg-gray-100",
+    approve_shortlist:
+      "border-amber-300 bg-amber-50 text-amber-700 hover:bg-amber-100",
+    rfp_wizard:
+      "border-blue-300 bg-blue-50 text-blue-700 hover:bg-blue-100",
+    rfp_ai:
+      "border-purple-300 bg-purple-50 text-purple-700 hover:bg-purple-100",
+  };
+
+  return (
+    <button
+      onClick={() => onAction(action)}
+      disabled={disabled}
+      className={`mt-1 inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-xs font-medium transition-colors disabled:opacity-40 ${
+        styleMap[action.type] ?? "border-gray-300 bg-gray-50 text-gray-700"
+      }`}
+    >
+      {iconMap[action.type]}
+      {action.label}
+    </button>
+  );
+}
+
+// ─── Message bubble ─────────────────────────────────────────────────────────
+
+function MessageBubble({
+  message,
+  onAction,
+  isActionDisabled,
+}: {
+  message: Message;
+  onAction: (action: ActionButton) => void;
+  isActionDisabled?: boolean;
+}) {
   const isUser = message.role === "user";
 
   return (
@@ -75,30 +224,39 @@ function MessageBubble({ message }: { message: Message }) {
         ) : (
           <div className="space-y-2">
             {message.content.split("\n").map((line, i) => {
-              if (!line.trim()) return <div key={i} className="h-1" />;
-              // Bold headers
-              const boldMatch = line.match(/^\*\*(.+)\*\*$/);
-              if (boldMatch) {
+              if (!line.trim()) return <div key={i} className="h-1.5" />;
+
+              const action = parseActionLine(line);
+              if (action) {
                 return (
-                  <p key={i} className="font-semibold text-gray-900">
-                    {boldMatch[1]}
-                  </p>
+                  <div key={i}>
+                    <ActionButtonUI
+                      action={action}
+                      onAction={onAction}
+                      disabled={isActionDisabled}
+                    />
+                  </div>
                 );
               }
-              // List items
-              if (line.trim().startsWith("- ") || line.trim().startsWith("• ")) {
+
+              if (/^---+$/.test(line.trim())) {
+                return <hr key={i} className="my-2 border-gray-200" />;
+              }
+              if (
+                line.trim().startsWith("- ") ||
+                line.trim().startsWith("• ")
+              ) {
                 return (
                   <p key={i} className="pl-3 text-gray-700">
                     {parseResultLinks(line)}
                   </p>
                 );
               }
-              // Numbered items
               if (/^\d+\./.test(line.trim())) {
                 return (
-                  <p key={i} className="text-gray-700">
+                  <div key={i} className="text-gray-700">
                     {parseResultLinks(line)}
-                  </p>
+                  </div>
                 );
               }
               return (
@@ -114,12 +272,78 @@ function MessageBubble({ message }: { message: Message }) {
   );
 }
 
+// ─── Shortlist panel ────────────────────────────────────────────────────────
+
+function ShortlistPanel({
+  firms,
+  onRemove,
+  onClose,
+}: {
+  firms: ShortlistFirm[];
+  onRemove: (firmId: string) => void;
+  onClose: () => void;
+}) {
+  return (
+    <div className="border-b border-gray-200 bg-teal-50/50 px-4 py-3">
+      <div className="mb-2 flex items-center justify-between">
+        <h4 className="flex items-center gap-1.5 text-xs font-semibold text-teal-800">
+          <ListChecks size={14} />
+          Shortlist ({firms.length} firm{firms.length !== 1 ? "s" : ""})
+        </h4>
+        <button
+          onClick={onClose}
+          className="rounded p-0.5 text-gray-400 hover:bg-gray-200 hover:text-gray-600"
+        >
+          <X size={12} />
+        </button>
+      </div>
+      {firms.length === 0 ? (
+        <p className="text-xs text-gray-500">
+          No firms shortlisted yet. Ask the AI to recommend firms and add them.
+        </p>
+      ) : (
+        <div className="space-y-1">
+          {firms.map((f) => (
+            <div
+              key={f.id}
+              className="flex items-center justify-between rounded bg-white px-2 py-1.5 text-xs"
+            >
+              <span className="font-medium text-gray-800">
+                {f.shortName || f.name}{" "}
+                <span className="font-normal text-gray-400">
+                  {f.city ? `${f.city}, ` : ""}
+                  {f.country}
+                </span>
+              </span>
+              <button
+                onClick={() => onRemove(f.id)}
+                className="rounded p-0.5 text-gray-400 hover:text-red-500"
+                title="Remove from shortlist"
+              >
+                <Trash2 size={12} />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Main component ─────────────────────────────────────────────────────────
+
 export function AiSearchChat() {
+  const router = useRouter();
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const [shortlist, setShortlist] = useState<ShortlistFirm[]>([]);
+  const [shortlistRfpId, setShortlistRfpId] = useState<string | null>(null);
+  const [showShortlist, setShowShortlist] = useState(false);
+
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
@@ -132,6 +356,118 @@ export function AiSearchChat() {
       inputRef.current.focus();
     }
   }, [isOpen]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    fetch("/api/shortlist")
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.firms) setShortlist(data.firms);
+        if (data.rfpId) setShortlistRfpId(data.rfpId);
+      })
+      .catch(() => {});
+  }, [isOpen]);
+
+  const addSystemMessage = useCallback((content: string) => {
+    setMessages((prev) => [
+      ...prev,
+      {
+        id: crypto.randomUUID(),
+        role: "assistant",
+        content,
+        timestamp: new Date(),
+      },
+    ]);
+  }, []);
+
+  // ─── Shortlist actions ──────────────────────────────────────────────────
+
+  async function handleAddToShortlist(firmId: string, firmName: string) {
+    try {
+      const res = await fetch("/api/shortlist", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "add_firm", firmId }),
+      });
+      const data = await res.json();
+      if (data.firms) {
+        setShortlist(data.firms);
+        setShortlistRfpId(data.rfpId);
+        addSystemMessage(
+          `**${firmName}** has been added to your shortlist. You now have **${data.firms.length}** firm${data.firms.length !== 1 ? "s" : ""} shortlisted.\n\n${data.firms.length >= 2 ? "When you're ready, you can approve the shortlist and send an RFP.\n{{approve_shortlist}}" : "Keep searching to add more firms, or approve when ready."}`
+        );
+      }
+    } catch {
+      addSystemMessage("Failed to add firm to shortlist. Please try again.");
+    }
+  }
+
+  async function handleRemoveFromShortlist(firmId: string) {
+    try {
+      const res = await fetch("/api/shortlist", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "remove_firm", firmId }),
+      });
+      const data = await res.json();
+      if (data.firms) setShortlist(data.firms);
+    } catch {}
+  }
+
+  function handleViewShortlist() {
+    setShowShortlist(true);
+  }
+
+  async function handleApproveShortlist() {
+    if (shortlist.length === 0) {
+      addSystemMessage(
+        "Your shortlist is empty. Search for firms and add them first."
+      );
+      return;
+    }
+
+    addSystemMessage(
+      `Your shortlist with **${shortlist.length}** firm${shortlist.length !== 1 ? "s" : ""} is approved! How would you like to create the RFP?\n\n{{rfp_wizard}}\n{{rfp_ai}}`
+    );
+  }
+
+  function handleRfpWizard() {
+    const firmIds = shortlist.map((f) => f.id).join(",");
+    router.push(`/rfp/new?firmIds=${firmIds}&draftId=${shortlistRfpId ?? ""}`);
+  }
+
+  function handleRfpAiAssistant() {
+    const firmIds = shortlist.map((f) => f.id).join(",");
+    router.push(
+      `/rfp/new?ai=true&firmIds=${firmIds}&draftId=${shortlistRfpId ?? ""}`
+    );
+  }
+
+  // ─── Action dispatch ────────────────────────────────────────────────────
+
+  function handleAction(action: ActionButton) {
+    switch (action.type) {
+      case "add_shortlist":
+        if (action.param) {
+          handleAddToShortlist(action.param, action.label);
+        }
+        break;
+      case "view_shortlist":
+        handleViewShortlist();
+        break;
+      case "approve_shortlist":
+        handleApproveShortlist();
+        break;
+      case "rfp_wizard":
+        handleRfpWizard();
+        break;
+      case "rfp_ai":
+        handleRfpAiAssistant();
+        break;
+    }
+  }
+
+  // ─── Chat submit ────────────────────────────────────────────────────────
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -151,11 +487,13 @@ export function AiSearchChat() {
     setError(null);
 
     try {
-      // Build full conversation history for the API
-      const chatHistory = [...messages, userMsg].map((m) => ({
-        role: m.role,
-        content: m.content,
-      }));
+      const chatHistory = [...messages, userMsg]
+        .filter(
+          (m) =>
+            !m.content.startsWith("**") ||
+            !m.content.includes("has been added to your shortlist")
+        )
+        .map((m) => ({ role: m.role, content: m.content }));
 
       const res = await fetch("/api/chat", {
         method: "POST",
@@ -192,6 +530,8 @@ export function AiSearchChat() {
     }
   }
 
+  // ─── Closed state ───────────────────────────────────────────────────────
+
   if (!isOpen) {
     return (
       <button
@@ -215,6 +555,8 @@ export function AiSearchChat() {
     );
   }
 
+  // ─── Open state ─────────────────────────────────────────────────────────
+
   return (
     <div className="rounded-lg border border-teal-200 bg-white shadow-lg">
       {/* Header */}
@@ -227,18 +569,40 @@ export function AiSearchChat() {
             <h3 className="text-sm font-semibold text-gray-900">
               AI Counsel Finder
             </h3>
-            <p className="text-[10px] text-gray-400">
-              Powered by Claude
-            </p>
+            <p className="text-[10px] text-gray-400">Powered by Claude</p>
           </div>
         </div>
-        <button
-          onClick={() => setIsOpen(false)}
-          className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
-        >
-          <X size={16} />
-        </button>
+        <div className="flex items-center gap-1.5">
+          {shortlist.length > 0 && (
+            <button
+              onClick={() => setShowShortlist((v) => !v)}
+              className={`flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium transition-colors ${
+                showShortlist
+                  ? "bg-teal-600 text-white"
+                  : "bg-teal-100 text-teal-700 hover:bg-teal-200"
+              }`}
+            >
+              <ListChecks size={12} />
+              {shortlist.length}
+            </button>
+          )}
+          <button
+            onClick={() => setIsOpen(false)}
+            className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
+          >
+            <X size={16} />
+          </button>
+        </div>
       </div>
+
+      {/* Shortlist panel */}
+      {showShortlist && (
+        <ShortlistPanel
+          firms={shortlist}
+          onRemove={handleRemoveFromShortlist}
+          onClose={() => setShowShortlist(false)}
+        />
+      )}
 
       {/* Messages */}
       <div className="h-[400px] overflow-y-auto px-4 py-3">
@@ -273,7 +637,12 @@ export function AiSearchChat() {
 
         <div className="space-y-4">
           {messages.map((msg) => (
-            <MessageBubble key={msg.id} message={msg} />
+            <MessageBubble
+              key={msg.id}
+              message={msg}
+              onAction={handleAction}
+              isActionDisabled={isLoading}
+            />
           ))}
           {isLoading && (
             <div className="flex gap-3">
@@ -306,10 +675,7 @@ export function AiSearchChat() {
             placeholder="Describe your legal needs..."
             rows={1}
             className="flex-1 resize-none rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-teal-500 focus:outline-none"
-            style={{
-              minHeight: "38px",
-              maxHeight: "100px",
-            }}
+            style={{ minHeight: "38px", maxHeight: "100px" }}
           />
           <button
             type="submit"

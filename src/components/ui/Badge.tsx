@@ -1,6 +1,6 @@
 import { cn } from "@/lib/utils";
 
-type BadgeVariant = "default" | "teal" | "amber" | "red" | "gray" | "blue" | "green";
+export type BadgeVariant = "default" | "teal" | "amber" | "red" | "gray" | "blue" | "green" | "outline";
 
 const variantClasses: Record<BadgeVariant, string> = {
   default: "bg-gray-100 text-gray-700",
@@ -10,6 +10,7 @@ const variantClasses: Record<BadgeVariant, string> = {
   gray: "bg-gray-100 text-gray-600",
   blue: "bg-blue-50 text-blue-700",
   green: "bg-green-50 text-green-700",
+  outline: "border border-gray-300 bg-white text-gray-700",
 };
 
 interface BadgeProps {

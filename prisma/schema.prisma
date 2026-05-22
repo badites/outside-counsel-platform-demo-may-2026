@@ -12,6 +12,7 @@ datasource db {
 enum UserRole {
   LAWYER
   ADMIN
+  OUTSIDE_COUNSEL
 }
 
 enum FirmType {
@@ -19,6 +20,7 @@ enum FirmType {
   BOUTIQUE
   MID_SIZE
   REGIONAL
+  ALSP
 }
 
 enum LawyerRole {
@@ -82,6 +84,148 @@ enum BenchmarkSource {
   MARKET
 }
 
+enum PanelStatus {
+  ACTIVE
+  PROBATION
+  EXITED
+  PROSPECTIVE
+}
+
+enum ComplexityTier {
+  COMPLEX
+  STANDARD
+  ROUTINE
+}
+
+enum MatterStatus {
+  DRAFT
+  INSTRUCTED
+  ACTIVE
+  ON_HOLD
+  CLOSED
+  CANCELLED
+}
+
+enum FeeType {
+  HOURLY
+  FIXED
+  CAPPED
+  PHASED_FIXED
+  BLENDED
+  COLLAR
+  SUCCESS
+  HYBRID
+}
+
+enum FeeArrangementStatus {
+  PROPOSED
+  AGREED
+  ACTIVE
+  EXPIRED
+  TERMINATED
+}
+
+enum InvoiceStatus {
+  SUBMITTED
+  UNDER_REVIEW
+  APPROVED
+  PARTIAL_APPROVAL
+  REJECTED
+  APPEALED
+  PAID
+}
+
+enum FlagCategory {
+  BLOCK_BILLING
+  PROHIBITED_FEE
+  RATE_VIOLATION
+  STAFFING_VIOLATION
+  DESCRIPTION_VIOLATION
+  INTERNAL_COMMS_EXCESS
+  EXPENSE_VIOLATION
+  LATE_SUBMISSION
+  BUDGET_EXCEEDED
+  OTHER
+}
+
+enum FlagAction {
+  REJECT
+  REDUCE
+  APPROVE_WITH_NOTE
+  APPROVE
+}
+
+enum RfpStatus {
+  DRAFT
+  OPEN
+  EVALUATING
+  SHORTLISTED
+  CLOSED
+  CANCELLED
+}
+
+enum RfpResponseStatus {
+  INVITED
+  DECLINED
+  SUBMITTED
+  SCORED
+  SHORTLISTED
+  SELECTED
+  UNSUCCESSFUL
+}
+
+enum ScorecardTier {
+  TOP_PERFORMER
+  MEETS_EXPECTATIONS
+  REQUIRES_IMPROVEMENT
+  EXIT_REVIEW
+}
+
+enum PanelAction {
+  RETAIN_PREFERRED
+  RETAIN
+  WATCH
+  IMPROVEMENT_PLAN
+  EXIT_REVIEW
+}
+
+enum OnboardingItemStatus {
+  PENDING
+  COMPLETE
+  OVERDUE
+  WAIVED
+}
+
+enum OcgStatus {
+  DRAFT
+  ACTIVE
+  SUPERSEDED
+  ARCHIVED
+}
+
+enum MaturityLevel {
+  EARLY
+  INTERMEDIATE
+  ADVANCED
+}
+
+enum AiOutputType {
+  INVOICE_REVIEW
+  RFP_DRAFT
+  RFP_EVALUATION
+  SCORECARD
+  MATTER_ALLOCATION
+  OCG_DRAFT
+  OCG_GAP_ANALYSIS
+  FEE_RECOMMENDATION
+  QBR_PREP
+  FIRM_COMPARISON
+  INSTRUCTION_AUDIT
+  PANEL_HEALTH
+  CONVERSATION_GUIDE
+  OTHER
+}
+
 // ─── Auth / Users ────────────────────────────────────────────────────────────
 
 model User {
@@ -89,6 +233,8 @@ model User {
   email     String    @unique
   name      String?
   role      UserRole  @default(LAWYER)
+  entityId  String?   @map("entity_id")
+  entity    Entity?   @relation(fields: [entityId], references: [id])
   createdAt DateTime  @default(now()) @map("created_at")
   updatedAt DateTime  @updatedAt @map("updated_at")
   deletedAt DateTime? @map("deleted_at")
@@ -100,11 +246,52 @@ model User {
   costBenchmarks     CostBenchmark[]
   preference         UserPreference?
   reviewedUpdates    ResearchUpdate[]
+  invoiceDecisions   InvoiceDecision[]
+  matterFeedbacks    MatterFeedback[]
+  scorecards         Scorecard[]
+  rfpsCreated        Rfp[]
+  rfpEvaluations     RfpEvaluation[]
+  aiOutputs          AiOutput[]
+  mattersCreated     Matter[]       @relation("MatterCreatedBy")
+  mattersSupervised  Matter[]       @relation("MatterSupervisor")
+  panelReviews       PanelReview[]
 
   @@map("users")
 }
 
 // ─── Reference Data ──────────────────────────────────────────────────────────
+
+model Entity {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  shortName String?  @map("short_name")
+  country   String
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  users       User[]
+  matters     Matter[]
+  invoices    Invoice[]
+  costCenters CostCenter[]
+
+  @@map("entities")
+}
+
+model CostCenter {
+  id        String   @id @default(cuid())
+  code      String   @unique
+  name      String
+  entityId  String   @map("entity_id")
+  entity    Entity   @relation(fields: [entityId], references: [id])
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  rfps Rfp[]
+
+  @@map("cost_centers")
+}
 
 model PracticeArea {
   id        String        @id @default(cuid())
@@ -121,6 +308,11 @@ model PracticeArea {
   lawyerRankings      LawyerRanking[]
   recommendations     Recommendation[]
   costBenchmarks      CostBenchmark[]
+  firmCapabilities    FirmCapability[]
+  matters             Matter[]
+  rfps                Rfp[]
+  scorecards          Scorecard[]
+  rateCards           RateCard[]
 
   @@map("practice_areas")
 }
@@ -138,6 +330,11 @@ model Jurisdiction {
   lawyerRankings      LawyerRanking[]
   engagements         Engagement[]
   costBenchmarks      CostBenchmark[]
+  firmCapabilities    FirmCapability[]
+  matters             Matter[]
+  rfps                Rfp[]
+  scorecards          Scorecard[]
+  rateCards           RateCard[]
 
   @@map("jurisdictions")
 }
@@ -145,33 +342,47 @@ model Jurisdiction {
 // ─── Firms ───────────────────────────────────────────────────────────────────
 
 model Firm {
-  id           String    @id @default(cuid())
+  id           String      @id @default(cuid())
   name         String
-  shortName    String?   @map("short_name")
+  shortName    String?     @map("short_name")
   country      String
   city         String
   website      String?
-  firmType     FirmType  @default(FULL_SERVICE) @map("firm_type")
+  firmType     FirmType    @default(FULL_SERVICE) @map("firm_type")
+  panelStatus  PanelStatus @default(PROSPECTIVE) @map("panel_status")
   headcount    Int?
-  foundedYear  Int?      @map("founded_year")
-  parentFirmId String?   @map("parent_firm_id")
-  parentFirm   Firm?     @relation("FirmSpinOffs", fields: [parentFirmId], references: [id])
-  spinOffs     Firm[]    @relation("FirmSpinOffs")
-  isActive     Boolean   @default(true) @map("is_active")
+  foundedYear  Int?        @map("founded_year")
+  parentFirmId String?     @map("parent_firm_id")
+  parentFirm   Firm?       @relation("FirmSpinOffs", fields: [parentFirmId], references: [id])
+  spinOffs     Firm[]      @relation("FirmSpinOffs")
+  isActive     Boolean     @default(true) @map("is_active")
   notes        String?
-  createdAt    DateTime  @default(now()) @map("created_at")
-  updatedAt    DateTime  @updatedAt @map("updated_at")
-  deletedAt    DateTime? @map("deleted_at")
+  createdAt    DateTime    @default(now()) @map("created_at")
+  updatedAt    DateTime    @updatedAt @map("updated_at")
+  deletedAt    DateTime?   @map("deleted_at")
 
-  firmLawyers      FirmLawyer[]
-  practiceAreas    FirmPracticeArea[]
-  rankings         FirmRanking[]
-  internalRatings  InternalRating[]
-  recommendations  Recommendation[]
-  engagements      Engagement[]
-  relationshipNotes RelationshipNote[]
-  costBenchmarks   CostBenchmark[]
-  researchUpdates  ResearchUpdate[]
+  firmLawyers        FirmLawyer[]
+  practiceAreas      FirmPracticeArea[]
+  rankings           FirmRanking[]
+  internalRatings    InternalRating[]
+  recommendations    Recommendation[]
+  engagements        Engagement[]
+  relationshipNotes  RelationshipNote[]
+  costBenchmarks     CostBenchmark[]
+  researchUpdates    ResearchUpdate[]
+  capabilities       FirmCapability[]
+  contacts           FirmContact[]
+  timekeepers        Timekeeper[]
+  rateCards          RateCard[]
+  matters            Matter[]
+  invoices           Invoice[]
+  feeArrangements    FeeArrangement[]
+  scorecards         Scorecard[]
+  matterFeedbacks    MatterFeedback[]
+  rfpInvitations     RfpInvitation[]
+  ocgAcknowledgments OcgAcknowledgment[]
+  panelReviewFirms   PanelReviewFirm[]
+  qbrs               Qbr[]
 
   @@map("firms")
 }
@@ -483,4 +694,665 @@ model ResearchUpdate {
   @@index([status])
   @@index([batchId])
   @@map("research_updates")
+}
+
+// ─── Currency & FX ─────────────────────────────────────────────────────────
+
+model Currency {
+  id        String   @id @default(cuid())
+  code      String   @unique
+  name      String
+  symbol    String
+  createdAt DateTime @default(now()) @map("created_at")
+
+  fxRatesFrom FxRate[] @relation("FxFrom")
+  fxRatesTo   FxRate[] @relation("FxTo")
+
+  @@map("currencies")
+}
+
+model FxRate {
+  id             String   @id @default(cuid())
+  fromCurrencyId String   @map("from_currency_id")
+  fromCurrency   Currency @relation("FxFrom", fields: [fromCurrencyId], references: [id])
+  toCurrencyId   String   @map("to_currency_id")
+  toCurrency     Currency @relation("FxTo", fields: [toCurrencyId], references: [id])
+  rate           Float
+  effectiveDate  DateTime @map("effective_date")
+  source         String?
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  @@unique([fromCurrencyId, toCurrencyId, effectiveDate])
+  @@index([effectiveDate])
+  @@map("fx_rates")
+}
+
+// ─── Firm Capabilities & Contacts (OCP Sub-Panel) ──────────────────────────
+
+model FirmCapability {
+  id               String        @id @default(cuid())
+  firmId           String        @map("firm_id")
+  firm             Firm          @relation(fields: [firmId], references: [id])
+  jurisdictionId   String        @map("jurisdiction_id")
+  jurisdiction     Jurisdiction  @relation(fields: [jurisdictionId], references: [id])
+  practiceAreaId   String        @map("practice_area_id")
+  practiceArea     PracticeArea  @relation(fields: [practiceAreaId], references: [id])
+  complexityTier   ComplexityTier @map("complexity_tier")
+  manualPriority   Int           @default(0) @map("manual_priority")
+  performanceScore Float?        @map("performance_score")
+  rateScore        Float?        @map("rate_score")
+  rankingScore     Float?        @map("ranking_score")
+  overallScore     Float?        @map("overall_score")
+  notes            String?
+  isActive         Boolean       @default(true) @map("is_active")
+  lastReviewedAt   DateTime?     @map("last_reviewed_at")
+  createdAt        DateTime      @default(now()) @map("created_at")
+  updatedAt        DateTime      @updatedAt @map("updated_at")
+
+  @@unique([firmId, jurisdictionId, practiceAreaId, complexityTier])
+  @@index([jurisdictionId, practiceAreaId, complexityTier, isActive])
+  @@map("firm_capabilities")
+}
+
+model FirmContact {
+  id        String   @id @default(cuid())
+  firmId    String   @map("firm_id")
+  firm      Firm     @relation(fields: [firmId], references: [id])
+  name      String
+  email     String?
+  phone     String?
+  role      String
+  isPrimary Boolean  @default(false) @map("is_primary")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("firm_contacts")
+}
+
+model Timekeeper {
+  id               String    @id @default(cuid())
+  firmId           String    @map("firm_id")
+  firm             Firm      @relation(fields: [firmId], references: [id])
+  name             String
+  title            String?
+  timekeeperLevel  String?   @map("timekeeper_level")
+  isApproved       Boolean   @default(false) @map("is_approved")
+  createdAt        DateTime  @default(now()) @map("created_at")
+  updatedAt        DateTime  @updatedAt @map("updated_at")
+  deletedAt        DateTime? @map("deleted_at")
+
+  rateCards     RateCard[]
+  invoiceLines  InvoiceLineItem[]
+
+  @@map("timekeepers")
+}
+
+model RateCard {
+  id             String        @id @default(cuid())
+  firmId         String        @map("firm_id")
+  firm           Firm          @relation(fields: [firmId], references: [id])
+  timekeeperId   String?       @map("timekeeper_id")
+  timekeeper     Timekeeper?   @relation(fields: [timekeeperId], references: [id])
+  practiceAreaId String?       @map("practice_area_id")
+  practiceArea   PracticeArea? @relation(fields: [practiceAreaId], references: [id])
+  jurisdictionId String?       @map("jurisdiction_id")
+  jurisdiction   Jurisdiction? @relation(fields: [jurisdictionId], references: [id])
+  timekeeperLevel String?     @map("timekeeper_level")
+  currencyCode   String       @default("USD") @map("currency_code")
+  hourlyRateCents Int         @map("hourly_rate_cents")
+  effectiveFrom  DateTime     @map("effective_from")
+  effectiveTo    DateTime?    @map("effective_to")
+  isApproved     Boolean      @default(false) @map("is_approved")
+  approvedAt     DateTime?    @map("approved_at")
+  createdAt      DateTime     @default(now()) @map("created_at")
+  updatedAt      DateTime     @updatedAt @map("updated_at")
+
+  @@index([firmId, effectiveFrom])
+  @@map("rate_cards")
+}
+
+// ─── OCG Management ────────────────────────────────────────────────────────
+
+model OutsideCounselGuideline {
+  id            String    @id @default(cuid())
+  version       String
+  title         String
+  maturityLevel MaturityLevel @map("maturity_level")
+  status        OcgStatus @default(DRAFT)
+  content       String
+  effectiveDate DateTime? @map("effective_date")
+  supersededAt  DateTime? @map("superseded_at")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+
+  acknowledgments OcgAcknowledgment[]
+
+  @@map("outside_counsel_guidelines")
+}
+
+model OcgAcknowledgment {
+  id        String   @id @default(cuid())
+  ocgId     String   @map("ocg_id")
+  ocg       OutsideCounselGuideline @relation(fields: [ocgId], references: [id])
+  firmId    String   @map("firm_id")
+  firm      Firm     @relation(fields: [firmId], references: [id])
+  acknowledgedAt DateTime? @map("acknowledged_at")
+  acknowledgedBy String?   @map("acknowledged_by")
+  notes     String?
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@unique([ocgId, firmId])
+  @@map("ocg_acknowledgments")
+}
+
+// ─── Matters ───────────────────────────────────────────────────────────────
+
+model Matter {
+  id               String       @id @default(cuid())
+  entityId         String       @map("entity_id")
+  entity           Entity       @relation(fields: [entityId], references: [id])
+  firmId           String?      @map("firm_id")
+  firm             Firm?        @relation(fields: [firmId], references: [id])
+  name             String
+  matterNumber     String?      @unique @map("matter_number")
+  practiceAreaId   String       @map("practice_area_id")
+  practiceArea     PracticeArea @relation(fields: [practiceAreaId], references: [id])
+  jurisdictionId   String       @map("jurisdiction_id")
+  jurisdiction     Jurisdiction @relation(fields: [jurisdictionId], references: [id])
+  complexityTier   ComplexityTier @map("complexity_tier")
+  status           MatterStatus @default(DRAFT)
+  description      String?
+  scope            String?
+  scopeExclusions  String?      @map("scope_exclusions")
+  startDate        DateTime?    @map("start_date")
+  targetEndDate    DateTime?    @map("target_end_date")
+  closedAt         DateTime?    @map("closed_at")
+  createdById      String       @map("created_by_id")
+  createdBy        User         @relation("MatterCreatedBy", fields: [createdById], references: [id])
+  supervisorId     String?      @map("supervisor_id")
+  supervisor       User?        @relation("MatterSupervisor", fields: [supervisorId], references: [id])
+  allocationRationale String?   @map("allocation_rationale")
+  createdAt        DateTime     @default(now()) @map("created_at")
+  updatedAt        DateTime     @updatedAt @map("updated_at")
+  deletedAt        DateTime?    @map("deleted_at")
+
+  feeArrangement    FeeArrangement?
+  budget            Budget?
+  invoices          Invoice[]
+  onboardingItems   OnboardingItem[]
+  matterFeedbacks   MatterFeedback[]
+  rfp               Rfp?
+  accruals          Accrual[]
+
+  @@index([entityId])
+  @@index([firmId])
+  @@index([status])
+  @@map("matters")
+}
+
+model OnboardingItem {
+  id          String              @id @default(cuid())
+  matterId    String              @map("matter_id")
+  matter      Matter              @relation(fields: [matterId], references: [id])
+  phase       Int
+  itemNumber  Int                 @map("item_number")
+  description String
+  owner       String
+  dueDate     DateTime?           @map("due_date")
+  status      OnboardingItemStatus @default(PENDING)
+  completedAt DateTime?           @map("completed_at")
+  notes       String?
+  createdAt   DateTime            @default(now()) @map("created_at")
+  updatedAt   DateTime            @updatedAt @map("updated_at")
+
+  @@unique([matterId, phase, itemNumber])
+  @@map("onboarding_items")
+}
+
+// ─── Fee Arrangements ──────────────────────────────────────────────────────
+
+model FeeArrangement {
+  id                String              @id @default(cuid())
+  matterId          String              @unique @map("matter_id")
+  matter            Matter              @relation(fields: [matterId], references: [id])
+  firmId            String              @map("firm_id")
+  firm              Firm                @relation(fields: [firmId], references: [id])
+  feeType           FeeType             @map("fee_type")
+  status            FeeArrangementStatus @default(PROPOSED)
+  currencyCode      String              @default("USD") @map("currency_code")
+  agreedFeeCents    Int?                @map("agreed_fee_cents")
+  capCents          Int?                @map("cap_cents")
+  collarLowPercent  Float?              @map("collar_low_percent")
+  collarHighPercent Float?              @map("collar_high_percent")
+  successTrigger    String?             @map("success_trigger")
+  scopeChangeThresholdCents Int?        @map("scope_change_threshold_cents")
+  aiEfficiencyTerm  String?             @map("ai_efficiency_term")
+  notes             String?
+  agreedAt          DateTime?           @map("agreed_at")
+  expiresAt         DateTime?           @map("expires_at")
+  createdAt         DateTime            @default(now()) @map("created_at")
+  updatedAt         DateTime            @updatedAt @map("updated_at")
+
+  @@map("fee_arrangements")
+}
+
+// ─── Budgets & Accruals ────────────────────────────────────────────────────
+
+model Budget {
+  id              String   @id @default(cuid())
+  matterId        String   @unique @map("matter_id")
+  matter          Matter   @relation(fields: [matterId], references: [id])
+  currencyCode    String   @default("USD") @map("currency_code")
+  approvedCents   Int      @map("approved_cents")
+  alertThreshold  Float    @default(0.8) @map("alert_threshold")
+  currentSpendCents Int    @default(0) @map("current_spend_cents")
+  isOverBudget    Boolean  @default(false) @map("is_over_budget")
+  approvedBy      String?  @map("approved_by")
+  approvedAt      DateTime? @map("approved_at")
+  notes           String?
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  alerts BudgetAlert[]
+
+  @@map("budgets")
+}
+
+model BudgetAlert {
+  id          String   @id @default(cuid())
+  budgetId    String   @map("budget_id")
+  budget      Budget   @relation(fields: [budgetId], references: [id])
+  thresholdPercent Float @map("threshold_percent")
+  triggeredAt DateTime @map("triggered_at")
+  acknowledged Boolean @default(false)
+  acknowledgedAt DateTime? @map("acknowledged_at")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@map("budget_alerts")
+}
+
+model Accrual {
+  id           String   @id @default(cuid())
+  matterId     String   @map("matter_id")
+  matter       Matter   @relation(fields: [matterId], references: [id])
+  periodStart  DateTime @map("period_start")
+  periodEnd    DateTime @map("period_end")
+  currencyCode String   @default("USD") @map("currency_code")
+  estimatedCents Int    @map("estimated_cents")
+  submittedBy  String?  @map("submitted_by")
+  submittedAt  DateTime? @map("submitted_at")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  @@index([matterId, periodEnd])
+  @@map("accruals")
+}
+
+// ─── Invoices & Compliance ─────────────────────────────────────────────────
+
+model Invoice {
+  id              String        @id @default(cuid())
+  entityId        String        @map("entity_id")
+  entity          Entity        @relation(fields: [entityId], references: [id])
+  firmId          String        @map("firm_id")
+  firm            Firm          @relation(fields: [firmId], references: [id])
+  matterId        String        @map("matter_id")
+  matter          Matter        @relation(fields: [matterId], references: [id])
+  invoiceNumber   String        @map("invoice_number")
+  invoiceDate     DateTime      @map("invoice_date")
+  periodStart     DateTime?     @map("period_start")
+  periodEnd       DateTime?     @map("period_end")
+  currencyCode    String        @default("USD") @map("currency_code")
+  submittedCents  Int           @map("submitted_cents")
+  approvedCents   Int?          @map("approved_cents")
+  rejectedCents   Int?          @map("rejected_cents")
+  status          InvoiceStatus @default(SUBMITTED)
+  submittedAt     DateTime?     @map("submitted_at")
+  isLate          Boolean       @default(false) @map("is_late")
+  daysLate        Int           @default(0) @map("days_late")
+  sourceFile      String?       @map("source_file")
+  createdAt       DateTime      @default(now()) @map("created_at")
+  updatedAt       DateTime      @updatedAt @map("updated_at")
+  deletedAt       DateTime?     @map("deleted_at")
+
+  lineItems  InvoiceLineItem[]
+  flags      InvoiceFlag[]
+  decision   InvoiceDecision?
+
+  @@unique([firmId, invoiceNumber])
+  @@index([entityId])
+  @@index([matterId])
+  @@index([status])
+  @@map("invoices")
+}
+
+model InvoiceLineItem {
+  id              String      @id @default(cuid())
+  invoiceId       String      @map("invoice_id")
+  invoice         Invoice     @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  lineNumber      Int         @map("line_number")
+  date            DateTime
+  timekeeperId    String?     @map("timekeeper_id")
+  timekeeper      Timekeeper? @relation(fields: [timekeeperId], references: [id])
+  timekeeperName  String?     @map("timekeeper_name")
+  timekeeperLevel String?     @map("timekeeper_level")
+  description     String
+  hours           Float?
+  rateCents       Int?        @map("rate_cents")
+  amountCents     Int         @map("amount_cents")
+  utbmsTaskCode   String?     @map("utbms_task_code")
+  utbmsActivityCode String?   @map("utbms_activity_code")
+  utbmsExpenseCode String?    @map("utbms_expense_code")
+  isExpense       Boolean     @default(false) @map("is_expense")
+  createdAt       DateTime    @default(now()) @map("created_at")
+
+  flags InvoiceFlag[]
+
+  @@index([invoiceId])
+  @@map("invoice_line_items")
+}
+
+model InvoiceFlag {
+  id              String       @id @default(cuid())
+  invoiceId       String       @map("invoice_id")
+  invoice         Invoice      @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  lineItemId      String?      @map("line_item_id")
+  lineItem        InvoiceLineItem? @relation(fields: [lineItemId], references: [id], onDelete: Cascade)
+  category        FlagCategory
+  action          FlagAction   @default(REJECT)
+  description     String
+  amountAtIssueCents Int?      @map("amount_at_issue_cents")
+  reducedToCents  Int?         @map("reduced_to_cents")
+  ocgReference    String?      @map("ocg_reference")
+  isAiGenerated   Boolean      @default(false) @map("is_ai_generated")
+  aiConfidence    Float?       @map("ai_confidence")
+  isOverridden    Boolean      @default(false) @map("is_overridden")
+  overrideReason  String?      @map("override_reason")
+  createdAt       DateTime     @default(now()) @map("created_at")
+  updatedAt       DateTime     @updatedAt @map("updated_at")
+
+  @@index([invoiceId])
+  @@index([category])
+  @@map("invoice_flags")
+}
+
+model InvoiceDecision {
+  id              String   @id @default(cuid())
+  invoiceId       String   @unique @map("invoice_id")
+  invoice         Invoice  @relation(fields: [invoiceId], references: [id])
+  decidedById     String   @map("decided_by_id")
+  decidedBy       User     @relation(fields: [decidedById], references: [id])
+  decision        InvoiceStatus
+  approvedCents   Int?     @map("approved_cents")
+  rejectedCents   Int?     @map("rejected_cents")
+  reason          String?
+  appealDeadline  DateTime? @map("appeal_deadline")
+  decidedAt       DateTime @map("decided_at")
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  @@map("invoice_decisions")
+}
+
+// ─── RFP Management ────────────────────────────────────────────────────────
+
+model Rfp {
+  id               String       @id @default(cuid())
+  matterId         String?      @unique @map("matter_id")
+  matter           Matter?      @relation(fields: [matterId], references: [id])
+  costCenterId     String?      @map("cost_center_id")
+  costCenter       CostCenter?  @relation(fields: [costCenterId], references: [id])
+  contactPersons   String?      @map("contact_persons")
+  practiceAreaId   String?      @map("practice_area_id")
+  practiceArea     PracticeArea? @relation(fields: [practiceAreaId], references: [id])
+  jurisdictionId   String?      @map("jurisdiction_id")
+  jurisdiction     Jurisdiction? @relation(fields: [jurisdictionId], references: [id])
+  title            String
+  status           RfpStatus    @default(DRAFT)
+  scopeDocument    String?      @map("scope_document")
+  pricingRequirements String?   @map("pricing_requirements")
+  evaluationCriteria String?    @map("evaluation_criteria")
+  matterNumber     String?      @map("matter_number")
+  requestFeeCap    Boolean      @default(true) @map("request_fee_cap")
+  requestSuggestedBudget Boolean @default(true) @map("request_suggested_budget")
+  additionalRequirements String? @map("additional_requirements")
+  deadline         DateTime?
+  createdById      String       @map("created_by_id")
+  createdBy        User         @relation(fields: [createdById], references: [id])
+  createdAt        DateTime     @default(now()) @map("created_at")
+  updatedAt        DateTime     @updatedAt @map("updated_at")
+
+  invitations RfpInvitation[]
+
+  @@map("rfps")
+}
+
+model RfpInvitation {
+  id            String          @id @default(cuid())
+  rfpId         String          @map("rfp_id")
+  rfp           Rfp             @relation(fields: [rfpId], references: [id], onDelete: Cascade)
+  firmId        String          @map("firm_id")
+  firm          Firm            @relation(fields: [firmId], references: [id])
+  status        RfpResponseStatus @default(INVITED)
+  invitedAt     DateTime        @default(now()) @map("invited_at")
+  respondedAt   DateTime?       @map("responded_at")
+  proposedFeeCents Int?         @map("proposed_fee_cents")
+  proposedFeeType FeeType?      @map("proposed_fee_type")
+  currencyCode  String?         @map("currency_code")
+  staffingPlan  String?         @map("staffing_plan")
+  responseDocument String?      @map("response_document")
+  aiDisclosure  String?         @map("ai_disclosure")
+  createdAt     DateTime        @default(now()) @map("created_at")
+  updatedAt     DateTime        @updatedAt @map("updated_at")
+
+  evaluations RfpEvaluation[]
+
+  @@unique([rfpId, firmId])
+  @@map("rfp_invitations")
+}
+
+model RfpEvaluation {
+  id              String        @id @default(cuid())
+  invitationId    String        @map("invitation_id")
+  invitation      RfpInvitation @relation(fields: [invitationId], references: [id], onDelete: Cascade)
+  evaluatorId     String        @map("evaluator_id")
+  evaluator       User          @relation(fields: [evaluatorId], references: [id])
+  criterionName   String        @map("criterion_name")
+  criterionWeight Float         @map("criterion_weight")
+  score           Int
+  comment         String?
+  createdAt       DateTime      @default(now()) @map("created_at")
+  updatedAt       DateTime      @updatedAt @map("updated_at")
+
+  @@unique([invitationId, evaluatorId, criterionName])
+  @@map("rfp_evaluations")
+}
+
+// ─── Performance Scorecard ─────────────────────────────────────────────────
+
+model Scorecard {
+  id              String        @id @default(cuid())
+  firmId          String        @map("firm_id")
+  firm            Firm          @relation(fields: [firmId], references: [id])
+  practiceAreaId  String?       @map("practice_area_id")
+  practiceArea    PracticeArea? @relation(fields: [practiceAreaId], references: [id])
+  jurisdictionId  String?       @map("jurisdiction_id")
+  jurisdiction    Jurisdiction? @relation(fields: [jurisdictionId], references: [id])
+  periodStart     DateTime      @map("period_start")
+  periodEnd       DateTime      @map("period_end")
+  quantitativeScore Float?      @map("quantitative_score")
+  qualitativeScore Float?       @map("qualitative_score")
+  compositeScore  Float?        @map("composite_score")
+  tier            ScorecardTier?
+  priorTier       ScorecardTier? @map("prior_tier")
+  createdById     String        @map("created_by_id")
+  createdBy       User          @relation(fields: [createdById], references: [id])
+  notes           String?
+  createdAt       DateTime      @default(now()) @map("created_at")
+  updatedAt       DateTime      @updatedAt @map("updated_at")
+
+  scores ScorecardScore[]
+
+  @@index([firmId, periodEnd])
+  @@map("scorecards")
+}
+
+model ScorecardScore {
+  id            String    @id @default(cuid())
+  scorecardId   String    @map("scorecard_id")
+  scorecard     Scorecard @relation(fields: [scorecardId], references: [id], onDelete: Cascade)
+  criterionCode String    @map("criterion_code")
+  criterionName String    @map("criterion_name")
+  isQuantitative Boolean  @map("is_quantitative")
+  weight        Float
+  score         Float
+  dataSource    String?   @map("data_source")
+  notes         String?
+  createdAt     DateTime  @default(now()) @map("created_at")
+
+  @@unique([scorecardId, criterionCode])
+  @@map("scorecard_scores")
+}
+
+model MatterFeedback {
+  id            String   @id @default(cuid())
+  matterId      String   @map("matter_id")
+  matter        Matter   @relation(fields: [matterId], references: [id])
+  firmId        String   @map("firm_id")
+  firm          Firm     @relation(fields: [firmId], references: [id])
+  completedById String   @map("completed_by_id")
+  completedBy   User     @relation(fields: [completedById], references: [id])
+  communication Int
+  qualityOfAdvice Int    @map("quality_of_advice")
+  businessAlignment Int  @map("business_alignment")
+  budgetManagement Int   @map("budget_management")
+  overallRating Int      @map("overall_rating")
+  wouldEngageAgain String? @map("would_engage_again")
+  reservations  String?
+  comments      String?
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  @@unique([matterId, completedById])
+  @@map("matter_feedbacks")
+}
+
+model Qbr {
+  id           String   @id @default(cuid())
+  firmId       String   @map("firm_id")
+  firm         Firm     @relation(fields: [firmId], references: [id])
+  periodStart  DateTime @map("period_start")
+  periodEnd    DateTime @map("period_end")
+  meetingDate  DateTime? @map("meeting_date")
+  agenda       String?
+  talkingPoints String? @map("talking_points")
+  agreedActions String? @map("agreed_actions")
+  internalNotes String? @map("internal_notes")
+  nextQbrDate  DateTime? @map("next_qbr_date")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  @@index([firmId, periodEnd])
+  @@map("qbrs")
+}
+
+// ─── Panel Review ──────────────────────────────────────────────────────────
+
+model PanelReview {
+  id            String   @id @default(cuid())
+  title         String
+  periodStart   DateTime @map("period_start")
+  periodEnd     DateTime @map("period_end")
+  conductedById String   @map("conducted_by_id")
+  conductedBy   User     @relation(fields: [conductedById], references: [id])
+  summary       String?
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  firmAssessments PanelReviewFirm[]
+
+  @@map("panel_reviews")
+}
+
+model PanelReviewFirm {
+  id                  String      @id @default(cuid())
+  panelReviewId       String      @map("panel_review_id")
+  panelReview         PanelReview @relation(fields: [panelReviewId], references: [id], onDelete: Cascade)
+  firmId              String      @map("firm_id")
+  firm                Firm        @relation(fields: [firmId], references: [id])
+  scorecardTier       ScorecardTier? @map("scorecard_tier")
+  billingComplianceRate Float?    @map("billing_compliance_rate")
+  recommendedAction   PanelAction @map("recommended_action")
+  actionBasis         String?     @map("action_basis")
+  improvementPlanRequired Boolean @default(false) @map("improvement_plan_required")
+  improvementDeadline DateTime?   @map("improvement_deadline")
+  notes               String?
+  createdAt           DateTime    @default(now()) @map("created_at")
+  updatedAt           DateTime    @updatedAt @map("updated_at")
+
+  @@unique([panelReviewId, firmId])
+  @@map("panel_review_firms")
+}
+
+// ─── Scoring Weights ───────────────────────────────────────────────────────
+
+model ScoringWeight {
+  id          String   @id @default(cuid())
+  context     String
+  criterion   String
+  weight      Float
+  description String?
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@unique([context, criterion])
+  @@map("scoring_weights")
+}
+
+// ─── AI Integration ────────────────────────────────────────────────────────
+
+model Skill {
+  id            String   @id @default(cuid())
+  skillNumber   Int      @unique @map("skill_number")
+  name          String   @unique
+  description   String
+  triggerPhrases String  @map("trigger_phrases")
+  systemPrompt  String   @map("system_prompt")
+  version       String   @default("1.0")
+  isActive      Boolean  @default(true) @map("is_active")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  aiOutputs AiOutput[]
+
+  @@map("skills")
+}
+
+model AiOutput {
+  id            String       @id @default(cuid())
+  skillId       String?      @map("skill_id")
+  skill         Skill?       @relation(fields: [skillId], references: [id])
+  outputType    AiOutputType @map("output_type")
+  userId        String       @map("user_id")
+  user          User         @relation(fields: [userId], references: [id])
+  prompt        String
+  response      String
+  model         String
+  promptVersion String?      @map("prompt_version")
+  tokenCount    Int?         @map("token_count")
+  createdAt     DateTime     @default(now()) @map("created_at")
+
+  @@index([outputType])
+  @@index([skillId])
+  @@map("ai_outputs")
+}
+
+// ─── Platform Settings ─────────────────────────────────────────────────────
+
+model PlatformSetting {
+  id        String   @id @default(cuid())
+  key       String   @unique
+  value     String
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("platform_settings")
 }

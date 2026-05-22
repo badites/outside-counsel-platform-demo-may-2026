@@ -1,110 +1,259 @@
-import Anthropic from "@anthropic-ai/sdk";
-import { DIRECTORY_TOOLS, executeTool } from "@/server/ai-search";
+import { spawn } from "child_process";
+import { prisma } from "@/server/db";
+import { computeNps } from "@/server/insights";
+import { getCurrentUser } from "@/server/current-user";
 
-const SYSTEM_PROMPT = `You are the AI assistant for SCG's Outside Counsel Directory — an internal tool used by the in-house legal team to find and evaluate law firms and individual lawyers.
+const INSTRUCTIONS = `You are the AI assistant for SCG's Outside Counsel Directory — an internal tool used by the in-house legal team to find and evaluate law firms and individual lawyers.
 
 Your role:
 - Help users find the right firm or lawyer for their legal needs
-- Interpret natural language queries and search the directory
-- Present results clearly with key metrics (composite fit score, NPS, rankings, practice areas)
-- When showing results, include the firm/lawyer ID so the user can click through to the detail page
-- If the user describes an engagement type (e.g. "cross-border M&A in Thailand"), map it to the appropriate practice area and jurisdiction filters
+- Interpret natural language queries and search the directory data provided below
+- Present results clearly with key metrics (NPS, rankings, practice areas)
+- If the user describes an engagement type (e.g. "cross-border M&A in Thailand"), find firms/lawyers with matching practice areas and jurisdictions
 - Proactively suggest related searches or deeper profiles when useful
 - Be concise but informative — this is for busy lawyers
+- Guide the user through a shortlisting workflow: recommend → shortlist → approve → RFP
+
+CRITICAL FORMATTING RULES:
+- NEVER show raw database IDs to the user. They are ugly and meaningless.
+- Instead, create clickable markdown links: use [Lawyer Name](/lawyers/ID) or [Firm Name](/firms/ID) so the user can click to view the full profile.
+- Always show contact info when available (email, LinkedIn URL).
+- Show the firm's website when available.
 
 When presenting search results, format them as a clear ranked list with:
-- Name and current firm (for lawyers)
-- Composite fit score (0-100)
-- NPS score if available
-- Key practice areas
-- Notable rankings (Chambers band, Legal 500 tier, etc.)
+1. **Name** as a clickable link to their profile page
+2. Current firm (for lawyers), also linked
+3. Contact info (email, LinkedIn) if available
+4. NPS score
+5. Key practice areas and notable rankings
+6. Firm website (for firm results)
 
-Always search the directory using the available tools before answering questions about firms or lawyers. Never make up information about specific firms or lawyers.`;
+Always use the directory data provided to answer questions. Never make up information.
+
+## ACTION BUTTONS
+
+You can include interactive action buttons in your responses. These render as clickable buttons in the UI. Use this exact syntax, each on its own line:
+
+{{add_shortlist:FIRM_ID:Firm Display Name}}  — adds a firm to the user's shortlist
+{{view_shortlist}}  — shows the current shortlist
+{{approve_shortlist}}  — approves the shortlist and proceeds to RFP
+{{rfp_wizard}}  — navigates to the step-by-step RFP wizard
+{{rfp_ai}}  — navigates to the AI-assisted RFP creator
+
+WHEN TO USE ACTION BUTTONS:
+- After recommending specific firms, include an {{add_shortlist:ID:Name}} button for EACH recommended firm so the user can easily shortlist them.
+- When the user seems satisfied with their selection or says something like "that's good" or "I'm done", suggest approving the shortlist with {{approve_shortlist}}.
+- When the user approves the shortlist, offer BOTH RFP options:
+  {{rfp_wizard}}
+  {{rfp_ai}}
+- You can include {{view_shortlist}} if the user asks what's in their shortlist.
+
+IMPORTANT: Always include the EXACT firm ID from the directory data in the add_shortlist action. The ID is in the JSON data — look it up.`;
 
 type ChatMessage = {
   role: "user" | "assistant";
   content: string;
 };
 
-export async function POST(request: Request) {
-  const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) {
-    return Response.json(
-      { error: "ANTHROPIC_API_KEY not configured. Add it to your .env file." },
-      { status: 500 }
-    );
+export const dynamic = "force-dynamic";
+
+async function getDirectoryContext(): Promise<string> {
+  const [firms, lawyers] = await Promise.all([
+    prisma.firm.findMany({
+      select: {
+        id: true,
+        name: true,
+        shortName: true,
+        country: true,
+        city: true,
+        firmType: true,
+        headcount: true,
+        website: true,
+        practiceAreas: {
+          include: { practiceArea: true, jurisdiction: true },
+        },
+        rankings: {
+          include: { rankingSource: true, practiceArea: true },
+        },
+        recommendations: {
+          where: { targetType: "FIRM" },
+          select: { npsScore: true },
+        },
+      },
+    }),
+    prisma.lawyer.findMany({
+      select: {
+        id: true,
+        name: true,
+        title: true,
+        email: true,
+        linkedInUrl: true,
+        firmLawyers: {
+          where: { isCurrent: true },
+          include: { firm: { select: { id: true, name: true } } },
+          take: 1,
+        },
+        practiceAreas: { include: { practiceArea: true } },
+        rankings: {
+          include: { rankingSource: true, practiceArea: true },
+        },
+        recommendations: {
+          where: { targetType: "LAWYER" },
+          select: { npsScore: true },
+        },
+      },
+    }),
+  ]);
+
+  const firmSummaries = firms.map((f) => ({
+    id: f.id,
+    name: f.name,
+    shortName: f.shortName,
+    country: f.country,
+    city: f.city,
+    type: f.firmType,
+    headcount: f.headcount,
+    website: f.website,
+    nps: computeNps(f.recommendations.map((r) => r.npsScore)).score,
+    practiceAreas: [
+      ...new Set(f.practiceAreas.map((pa) => pa.practiceArea.name)),
+    ],
+    jurisdictions: [
+      ...new Set(
+        f.practiceAreas
+          .filter((pa) => pa.jurisdiction)
+          .map((pa) => pa.jurisdiction!.name)
+      ),
+    ],
+    rankings: f.rankings.map(
+      (r) =>
+        `${r.rankingSource.publisher} ${r.rankingSource.editionYear}: ${r.practiceArea.name}${r.band ? ` Band ${r.band}` : ""}${r.tier ? ` Tier ${r.tier}` : ""}`
+    ),
+  }));
+
+  const lawyerSummaries = lawyers.map((l) => ({
+    id: l.id,
+    name: l.name,
+    title: l.title,
+    email: l.email,
+    linkedIn: l.linkedInUrl,
+    firm: l.firmLawyers[0]?.firm
+      ? { id: l.firmLawyers[0].firm.id, name: l.firmLawyers[0].firm.name }
+      : null,
+    practiceAreas: [
+      ...new Set(l.practiceAreas.map((pa) => pa.practiceArea.name)),
+    ],
+    nps: computeNps(l.recommendations.map((r) => r.npsScore)).score,
+    rankings: l.rankings.map(
+      (r) =>
+        `${r.rankingSource.publisher} ${r.rankingSource.editionYear}: ${r.practiceArea.name}${r.category ? ` (${r.category})` : ""}`
+    ),
+  }));
+
+  return JSON.stringify({ firms: firmSummaries, lawyers: lawyerSummaries });
+}
+
+async function getShortlistContext(userId: string): Promise<string> {
+  const rfp = await prisma.rfp.findFirst({
+    where: { title: "__ai_shortlist__", status: "DRAFT", createdById: userId },
+    include: {
+      invitations: {
+        include: {
+          firm: { select: { id: true, name: true, shortName: true } },
+        },
+      },
+    },
+  });
+
+  if (!rfp || rfp.invitations.length === 0) {
+    return "Current shortlist: EMPTY (no firms selected yet)";
   }
 
+  const names = rfp.invitations
+    .map((i) => i.firm.shortName || i.firm.name)
+    .join(", ");
+  return `Current shortlist (${rfp.invitations.length} firms): ${names}`;
+}
+
+function claudeGenerate(prompt: string): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const isWindows = process.platform === "win32";
+    const proc = spawn(
+      "claude",
+      [
+        "--print",
+        "--output-format",
+        "text",
+        "--model",
+        "sonnet",
+        "--max-turns",
+        "1",
+      ],
+      {
+        shell: isWindows,
+        stdio: ["pipe", "pipe", "pipe"],
+      }
+    );
+
+    const timer = setTimeout(() => {
+      proc.kill();
+      reject(new Error("Claude CLI timed out after 120 seconds"));
+    }, 120_000);
+
+    let stdout = "";
+    let stderr = "";
+    proc.stdout.on("data", (chunk: Buffer) => {
+      stdout += chunk.toString();
+    });
+    proc.stderr.on("data", (chunk: Buffer) => {
+      stderr += chunk.toString();
+    });
+    proc.on("close", (code) => {
+      clearTimeout(timer);
+      if (code === 0) resolve(stdout.trim());
+      else reject(new Error(stderr || `Claude CLI exited with code ${code}`));
+    });
+    proc.on("error", (err) => {
+      clearTimeout(timer);
+      reject(err);
+    });
+
+    proc.stdin.write(prompt);
+    proc.stdin.end();
+  });
+}
+
+export async function POST(request: Request) {
   const { messages } = (await request.json()) as { messages: ChatMessage[] };
 
   if (!messages || messages.length === 0) {
     return Response.json({ error: "No messages provided" }, { status: 400 });
   }
 
-  const client = new Anthropic({ apiKey });
-
-  // Build Anthropic message format
-  const anthropicMessages: Anthropic.MessageParam[] = messages.map((m) => ({
-    role: m.role,
-    content: m.content,
-  }));
-
   try {
-    // Agentic loop: keep calling Claude until it stops using tools
-    let response = await client.messages.create({
-      model: "claude-sonnet-4-20250514",
-      max_tokens: 4096,
-      system: SYSTEM_PROMPT,
-      messages: anthropicMessages,
-      tools: DIRECTORY_TOOLS,
-    });
+    const user = await getCurrentUser();
+    const [directoryContext, shortlistContext] = await Promise.all([
+      getDirectoryContext(),
+      getShortlistContext(user.id),
+    ]);
 
-    // Collect tool results and keep going
-    const allMessages: Anthropic.MessageParam[] = [...anthropicMessages];
+    const conversationHistory = messages
+      .slice(0, -1)
+      .map(
+        (m) => `${m.role === "user" ? "Human" : "Assistant"}: ${m.content}`
+      )
+      .join("\n\n");
+    const latestMessage = messages[messages.length - 1].content;
 
-    while (response.stop_reason === "tool_use") {
-      // Extract tool use blocks
-      const toolUseBlocks = response.content.filter(
-        (block) => block.type === "tool_use"
-      );
-
-      // Add assistant response with tool use
-      allMessages.push({ role: "assistant", content: response.content });
-
-      // Execute all tools and collect results
-      const toolResults: Anthropic.ToolResultBlockParam[] = [];
-      for (const toolUse of toolUseBlocks) {
-        if (toolUse.type !== "tool_use") continue;
-        const tu = toolUse as Anthropic.ToolUseBlock;
-        const result = await executeTool(
-          tu.name,
-          tu.input as Record<string, unknown>
-        );
-        toolResults.push({
-          type: "tool_result",
-          tool_use_id: tu.id,
-          content: result,
-        });
-      }
-
-      // Add tool results
-      allMessages.push({ role: "user", content: toolResults });
-
-      // Call Claude again with tool results
-      response = await client.messages.create({
-        model: "claude-sonnet-4-20250514",
-        max_tokens: 4096,
-        system: SYSTEM_PROMPT,
-        messages: allMessages,
-        tools: DIRECTORY_TOOLS,
-      });
+    let fullPrompt = `${INSTRUCTIONS}\n\n`;
+    fullPrompt += `## ${shortlistContext}\n\n`;
+    fullPrompt += `=== DIRECTORY DATA (JSON) ===\n${directoryContext}\n=== END DATA ===\n\n`;
+    if (conversationHistory) {
+      fullPrompt += `Previous conversation:\n${conversationHistory}\n\n`;
     }
+    fullPrompt += `Human: ${latestMessage}\n\nRespond helpfully using the directory data above. Include action buttons where appropriate. Do not use any tools — all data you need is already provided.`;
 
-    // Extract the final text response
-    const textBlocks = response.content.filter(
-      (block): block is Anthropic.TextBlock => block.type === "text"
-    );
-    const assistantMessage = textBlocks.map((b) => b.text).join("\n\n");
+    const assistantMessage = await claudeGenerate(fullPrompt);
 
     return Response.json({ message: assistantMessage });
   } catch (err) {

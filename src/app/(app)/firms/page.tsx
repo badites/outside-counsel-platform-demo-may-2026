@@ -14,6 +14,7 @@ const firmTypeBadgeVariant: Record<FirmTypeEnum, "teal" | "amber" | "blue" | "gr
   BOUTIQUE: "amber",
   MID_SIZE: "blue",
   REGIONAL: "gray",
+  ALSP: "blue",
 };
 
 interface FirmsPageProps {

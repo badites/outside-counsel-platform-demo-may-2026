@@ -9,6 +9,7 @@ import {
   Trophy,
   Briefcase,
   GitBranch,
+  FileText,
   Settings,
   Shield,
   Bot,
@@ -24,6 +25,7 @@ const navItems = [
   { label: "Lawyers", href: "/lawyers", icon: Users },
   { label: "Rankings", href: "/rankings", icon: Trophy },
   { label: "Engagements", href: "/engagements", icon: Briefcase },
+  { label: "RFP", href: "/rfp", icon: FileText },
   { label: "Network", href: "/network", icon: GitBranch },
   { label: "Settings", href: "/settings", icon: Settings },
 ];

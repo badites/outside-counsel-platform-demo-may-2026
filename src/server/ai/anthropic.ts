@@ -1,0 +1,121 @@
+import Anthropic from "@anthropic-ai/sdk";
+import { callClaudeCli } from "./claude-cli";
+
+const globalForAnthropic = globalThis as unknown as {
+  anthropic: Anthropic | undefined;
+};
+
+export const anthropic =
+  globalForAnthropic.anthropic ?? new Anthropic();
+
+if (process.env.NODE_ENV !== "production") {
+  globalForAnthropic.anthropic = anthropic;
+}
+
+export const DEFAULT_MODEL = "claude-sonnet-4-6";
+
+export type AiProvider = "api" | "cli";
+
+export function getProvider(): AiProvider {
+  return (process.env.AI_PROVIDER as AiProvider) ?? "api";
+}
+
+export type ClaudeRequest = {
+  systemPrompt: string;
+  userMessage: string;
+  model?: string;
+  maxTokens?: number;
+  temperature?: number;
+};
+
+export type ClaudeResponse = {
+  content: string;
+  model: string;
+  inputTokens: number;
+  outputTokens: number;
+  stopReason: string | null;
+};
+
+export async function callClaude(
+  request: ClaudeRequest
+): Promise<ClaudeResponse> {
+  if (getProvider() === "cli") {
+    const cliModel =
+      request.model === "claude-sonnet-4-6" || !request.model
+        ? "sonnet"
+        : request.model === "claude-opus-4-6"
+          ? "opus"
+          : request.model === "claude-haiku-4-5-20251001"
+            ? "haiku"
+            : request.model ?? "sonnet";
+
+    const cliResp = await callClaudeCli({
+      systemPrompt: request.systemPrompt,
+      userMessage: request.userMessage,
+      model: cliModel,
+    });
+
+    return {
+      content: cliResp.content,
+      model: cliResp.model,
+      inputTokens: cliResp.inputTokens,
+      outputTokens: cliResp.outputTokens,
+      stopReason: "end_turn",
+    };
+  }
+
+  const model = request.model ?? DEFAULT_MODEL;
+
+  const message = await anthropic.messages.create({
+    model,
+    max_tokens: request.maxTokens ?? 8192,
+    temperature: request.temperature ?? 0.3,
+    system: request.systemPrompt,
+    messages: [{ role: "user", content: request.userMessage }],
+  });
+
+  const textBlocks = message.content.filter(
+    (block): block is Anthropic.TextBlock => block.type === "text"
+  );
+  const content = textBlocks.map((b) => b.text).join("\n\n");
+
+  return {
+    content,
+    model: message.model,
+    inputTokens: message.usage.input_tokens,
+    outputTokens: message.usage.output_tokens,
+    stopReason: message.stop_reason,
+  };
+}
+
+export async function streamClaude(
+  request: ClaudeRequest,
+  onText: (chunk: string) => void
+): Promise<ClaudeResponse> {
+  const model = request.model ?? DEFAULT_MODEL;
+
+  const stream = anthropic.messages.stream({
+    model,
+    max_tokens: request.maxTokens ?? 8192,
+    temperature: request.temperature ?? 0.3,
+    system: request.systemPrompt,
+    messages: [{ role: "user", content: request.userMessage }],
+  });
+
+  let content = "";
+
+  stream.on("text", (text) => {
+    content += text;
+    onText(text);
+  });
+
+  const finalMessage = await stream.finalMessage();
+
+  return {
+    content,
+    model: finalMessage.model,
+    inputTokens: finalMessage.usage.input_tokens,
+    outputTokens: finalMessage.usage.output_tokens,
+    stopReason: finalMessage.stop_reason,
+  };
+}

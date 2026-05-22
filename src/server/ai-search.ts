@@ -120,7 +120,7 @@ async function resolveJurisdictionId(name: string): Promise<string | undefined> 
 
 export async function executeSearchFirms(
   args: Record<string, unknown>
-): Promise<{ firms: ScoredFirm[] }> {
+): Promise<{ firms: (ScoredFirm & { website: string | null; headcount: number | null })[] }> {
   const user = await getCurrentUser();
   const weights = await getUserPreference(user.id);
 
@@ -139,13 +139,24 @@ export async function executeSearchFirms(
     minNps: args.minNps as number | undefined,
   });
 
-  // Return top 10 for chat context
-  return { firms: firms.slice(0, 10) };
+  // Enrich top 10 with contact details
+  const top = firms.slice(0, 10);
+  const enriched = await Promise.all(
+    top.map(async (f) => {
+      const firm = await prisma.firm.findUnique({
+        where: { id: f.id },
+        select: { website: true, headcount: true },
+      });
+      return { ...f, website: firm?.website ?? null, headcount: firm?.headcount ?? null };
+    })
+  );
+
+  return { firms: enriched };
 }
 
 export async function executeSearchLawyers(
   args: Record<string, unknown>
-): Promise<{ lawyers: ScoredLawyer[] }> {
+): Promise<{ lawyers: (ScoredLawyer & { email: string | null; linkedInUrl: string | null; firmWebsite: string | null })[] }> {
   const user = await getCurrentUser();
   const weights = await getUserPreference(user.id);
 
@@ -162,7 +173,32 @@ export async function executeSearchLawyers(
     jurisdictionId,
   });
 
-  return { lawyers: lawyers.slice(0, 10) };
+  // Enrich top 10 with contact details
+  const top = lawyers.slice(0, 10);
+  const enriched = await Promise.all(
+    top.map(async (l) => {
+      const lawyer = await prisma.lawyer.findUnique({
+        where: { id: l.id },
+        select: {
+          email: true,
+          linkedInUrl: true,
+          firmLawyers: {
+            where: { isCurrent: true },
+            include: { firm: { select: { website: true } } },
+            take: 1,
+          },
+        },
+      });
+      return {
+        ...l,
+        email: lawyer?.email ?? null,
+        linkedInUrl: lawyer?.linkedInUrl ?? null,
+        firmWebsite: lawyer?.firmLawyers[0]?.firm?.website ?? null,
+      };
+    })
+  );
+
+  return { lawyers: enriched };
 }
 
 export async function executeGetFirmProfile(

@@ -58,7 +58,6 @@ Two user roles:
 - Do not add an ORM other than Prisma.
 - Do not introduce state management libraries. Server Components plus URL state are sufficient.
 - Do not write CSS files. Tailwind classes only.
-- Do not scrape external ranking directories.
 - Do not store secrets in the codebase.
 - Do not skip Zod validation on any input that crosses a trust boundary.
 
