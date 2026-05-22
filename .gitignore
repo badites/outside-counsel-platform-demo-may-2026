@@ -55,3 +55,11 @@ prisma/dev.db-journal
 # mcp server build artifacts
 mcp-server/dist/
 mcp-server/node_modules/
+
+# claude code
+.claude/
+
+# data scraping artifacts
+/data/
+/scripts/
+/docs/

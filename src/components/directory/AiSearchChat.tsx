@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { useApiKey } from "@/components/ApiKeyProvider";
 import {
   Send,
   Bot,
@@ -348,6 +349,7 @@ function ShortlistPanel({
 
 export function AiSearchChat() {
   const router = useRouter();
+  const { getHeaders, needsKey, showKeyPrompt } = useApiKey();
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
@@ -495,10 +497,14 @@ export function AiSearchChat() {
 
   // ─── Chat submit ────────────────────────────────────────────────────────
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    const trimmed = input.trim();
+  async function submitMessage(text: string) {
+    const trimmed = text.trim();
     if (!trimmed || isLoading) return;
+
+    if (needsKey) {
+      showKeyPrompt();
+      return;
+    }
 
     if (!isOpen) setIsOpen(true);
 
@@ -525,11 +531,17 @@ export function AiSearchChat() {
 
       const res = await fetch("/api/chat", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...getHeaders() },
         body: JSON.stringify({ messages: chatHistory }),
       });
 
       const data = await res.json();
+
+      if (data.needsApiKey) {
+        showKeyPrompt();
+        setError("Please configure your Anthropic API key to use AI features.");
+        return;
+      }
 
       if (!res.ok) {
         setError(data.error ?? "Something went wrong");
@@ -551,6 +563,11 @@ export function AiSearchChat() {
     }
   }
 
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    submitMessage(input);
+  }
+
   function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
@@ -558,41 +575,54 @@ export function AiSearchChat() {
     }
   }
 
+  // ─── Suggested prompts ──────────────────────────────────────────────────
+
+  const suggestions = [
+    "Find me a litigation firm in Thailand",
+    "Top M&A lawyers we've worked with",
+    "IP boutique in Singapore",
+    "Compare firms for banking & finance",
+  ];
+
+  function handleSuggestionClick(suggestion: string) {
+    setIsOpen(true);
+    submitMessage(suggestion);
+  }
+
   // ─── Inline trigger bar (always visible in page flow) ──────────────────
 
   const triggerBar = (
-    <form onSubmit={handleSubmit} className="relative">
-      <div className="flex items-center gap-3 rounded-lg border border-teal-200 bg-gradient-to-r from-teal-50 to-amber-50/30 px-4 py-2.5 transition-all hover:border-teal-300 hover:shadow-md">
+    <div className="space-y-2">
+      <div
+        onClick={() => setIsOpen(true)}
+        className="flex cursor-pointer items-center gap-3 rounded-lg border border-teal-200 bg-gradient-to-r from-teal-50 to-amber-50/30 px-4 py-2.5 transition-all hover:border-teal-300 hover:shadow-md"
+      >
         <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-teal-600">
           <Sparkles size={14} className="text-white" />
         </div>
-        <input
-          type="text"
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          onFocus={() => { if (messages.length > 0) setIsOpen(true); }}
-          placeholder="Describe your legal needs..."
-          className="flex-1 bg-transparent text-sm text-gray-900 placeholder-gray-500 outline-none"
-        />
-        {input.trim() ? (
-          <button
-            type="submit"
-            disabled={isLoading}
-            className="flex h-8 w-8 items-center justify-center rounded-md bg-teal-600 text-white hover:bg-teal-700 disabled:opacity-40"
-          >
-            <Send size={14} />
-          </button>
-        ) : messages.length > 0 ? (
-          <button
-            type="button"
-            onClick={() => setIsOpen(true)}
-            className="flex h-8 w-8 items-center justify-center rounded-md bg-teal-100 text-teal-600 hover:bg-teal-200"
-          >
-            <MessageSquare size={14} />
-          </button>
-        ) : null}
+        <span className="flex-1 text-sm text-gray-400">
+          Find me a lawyer for...
+        </span>
+        {messages.length > 0 && (
+          <div className="flex h-6 w-6 items-center justify-center rounded-full bg-teal-100 text-teal-600">
+            <MessageSquare size={12} />
+          </div>
+        )}
       </div>
-    </form>
+      {messages.length === 0 && (
+        <div className="flex flex-wrap gap-2">
+          {suggestions.map((s) => (
+            <button
+              key={s}
+              onClick={() => handleSuggestionClick(s)}
+              className="rounded-full border border-gray-200 bg-white px-3 py-1 text-xs text-gray-600 transition-colors hover:border-teal-300 hover:bg-teal-50 hover:text-teal-700"
+            >
+              {s}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
   );
 
   // ─── Floating drawer (overlay, doesn't push content) ───────────────────
@@ -670,10 +700,7 @@ export function AiSearchChat() {
                 ].map((suggestion) => (
                   <button
                     key={suggestion}
-                    onClick={() => {
-                      setInput(suggestion);
-                      inputRef.current?.focus();
-                    }}
+                    onClick={() => submitMessage(suggestion)}
                     className="block w-full rounded-md border border-gray-200 px-3 py-2 text-left text-xs text-gray-600 hover:border-teal-300 hover:bg-teal-50/50"
                   >
                     &ldquo;{suggestion}&rdquo;
@@ -721,7 +748,7 @@ export function AiSearchChat() {
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={handleKeyDown}
-              placeholder="Describe your legal needs..."
+              placeholder="Find me a lawyer for..."
               rows={1}
               className="flex-1 resize-none rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-teal-500 focus:outline-none"
               style={{ minHeight: "38px", maxHeight: "100px" }}

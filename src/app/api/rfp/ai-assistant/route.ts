@@ -1,4 +1,4 @@
-import { spawn } from "child_process";
+import { callClaude, resolveApiKey } from "@/server/ai/anthropic";
 
 export const dynamic = "force-dynamic";
 
@@ -65,36 +65,6 @@ RULES:
 - When enough information is gathered (at least description, jurisdiction, and practice area), let the user know they can click "Review & Send RFP" in the side panel, but offer to refine further.
 - Always respond with pure JSON. No markdown code fences, no extra text.`;
 
-function claudeGenerate(prompt: string): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const isWindows = process.platform === "win32";
-    const proc = spawn(
-      "claude",
-      ["--print", "--output-format", "text", "--model", "sonnet", "--max-turns", "1"],
-      { shell: isWindows, stdio: ["pipe", "pipe", "pipe"] }
-    );
-
-    const timer = setTimeout(() => {
-      proc.kill();
-      reject(new Error("Claude CLI timed out after 120 seconds"));
-    }, 120_000);
-
-    let stdout = "";
-    let stderr = "";
-    proc.stdout.on("data", (chunk: Buffer) => { stdout += chunk.toString(); });
-    proc.stderr.on("data", (chunk: Buffer) => { stderr += chunk.toString(); });
-    proc.on("close", (code) => {
-      clearTimeout(timer);
-      if (code === 0) resolve(stdout.trim());
-      else reject(new Error(stderr || `Claude CLI exited with code ${code}`));
-    });
-    proc.on("error", (err) => { clearTimeout(timer); reject(err); });
-
-    proc.stdin.write(prompt);
-    proc.stdin.end();
-  });
-}
-
 export async function POST(request: Request) {
   const body = (await request.json()) as RequestBody;
   const { messages, currentFields, jurisdictions, practiceAreas } = body;
@@ -102,6 +72,8 @@ export async function POST(request: Request) {
   if (!messages?.length) {
     return Response.json({ error: "No messages" }, { status: 400 });
   }
+
+  const apiKey = resolveApiKey(request);
 
   const systemPrompt = SYSTEM_PROMPT
     .replace("{JURISDICTIONS}", JSON.stringify(jurisdictions.map((j) => ({ id: j.id, name: j.name }))))
@@ -111,25 +83,33 @@ export async function POST(request: Request) {
     .map((m) => `${m.role === "user" ? "Human" : "Assistant"}: ${m.content}`)
     .join("\n\n");
 
-  const fullPrompt = `${systemPrompt}\n\nCurrent extracted fields: ${JSON.stringify(currentFields)}\n\nConversation:\n${conversationHistory}\n\nRespond with JSON only.`;
+  const userMessage = `Current extracted fields: ${JSON.stringify(currentFields)}\n\nConversation:\n${conversationHistory}\n\nRespond with JSON only.`;
 
   try {
-    const raw = await claudeGenerate(fullPrompt);
+    const response = await callClaude({
+      systemPrompt,
+      userMessage,
+      apiKey,
+    });
 
     let parsed: { message: string; fields?: Record<string, unknown> };
     try {
-      const jsonMatch = raw.match(/\{[\s\S]*\}/);
-      parsed = JSON.parse(jsonMatch?.[0] ?? raw);
+      const jsonMatch = response.content.match(/\{[\s\S]*\}/);
+      parsed = JSON.parse(jsonMatch?.[0] ?? response.content);
     } catch {
-      parsed = { message: raw, fields: {} };
+      parsed = { message: response.content, fields: {} };
     }
 
     return Response.json({
-      message: parsed.message ?? raw,
+      message: parsed.message ?? response.content,
       fields: parsed.fields ?? {},
     });
   } catch (err) {
     console.error("AI RFP assistant error:", err);
+    const errorMessage = err instanceof Error ? err.message : "Unknown error";
+    if (errorMessage.includes("API key")) {
+      return Response.json({ error: errorMessage, needsApiKey: true }, { status: 401 });
+    }
     return Response.json(
       { message: "I'm having trouble connecting. Please try again.", fields: {} },
       { status: 200 }

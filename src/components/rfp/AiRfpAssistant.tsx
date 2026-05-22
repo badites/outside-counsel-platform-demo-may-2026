@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { useApiKey } from "@/components/ApiKeyProvider";
 import {
   Send,
   Bot,
@@ -59,6 +60,7 @@ export function AiRfpAssistant({
   practiceAreas: { id: string; name: string }[];
 }) {
   const router = useRouter();
+  const { getHeaders, needsKey, showKeyPrompt } = useApiKey();
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -85,6 +87,11 @@ export function AiRfpAssistant({
     const trimmed = input.trim();
     if (!trimmed || isLoading) return;
 
+    if (needsKey) {
+      showKeyPrompt();
+      return;
+    }
+
     const userMsg: Message = {
       id: crypto.randomUUID(),
       role: "user",
@@ -98,7 +105,7 @@ export function AiRfpAssistant({
     try {
       const res = await fetch("/api/rfp/ai-assistant", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...getHeaders() },
         body: JSON.stringify({
           messages: [...messages, userMsg].map((m) => ({
             role: m.role,
@@ -113,6 +120,19 @@ export function AiRfpAssistant({
       });
 
       const data = await res.json();
+
+      if (data.needsApiKey) {
+        showKeyPrompt();
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: crypto.randomUUID(),
+            role: "assistant",
+            content: "Please configure your Anthropic API key to use AI features.",
+          },
+        ]);
+        return;
+      }
 
       if (!res.ok) {
         setMessages((prev) => [

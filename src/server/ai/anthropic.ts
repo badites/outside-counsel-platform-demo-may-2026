@@ -1,5 +1,4 @@
 import Anthropic from "@anthropic-ai/sdk";
-import { callClaudeCli } from "./claude-cli";
 
 const globalForAnthropic = globalThis as unknown as {
   anthropic: Anthropic | undefined;
@@ -14,10 +13,22 @@ if (process.env.NODE_ENV !== "production") {
 
 export const DEFAULT_MODEL = "claude-sonnet-4-6";
 
-export type AiProvider = "api" | "cli";
+export function hasServerApiKey(): boolean {
+  return !!process.env.ANTHROPIC_API_KEY;
+}
 
-export function getProvider(): AiProvider {
-  return (process.env.AI_PROVIDER as AiProvider) ?? "api";
+export function getClient(requestApiKey?: string): Anthropic {
+  if (requestApiKey) {
+    return new Anthropic({ apiKey: requestApiKey });
+  }
+  if (process.env.ANTHROPIC_API_KEY) {
+    return anthropic;
+  }
+  throw new Error("No Anthropic API key configured. Set ANTHROPIC_API_KEY or provide your own key in Settings.");
+}
+
+export function resolveApiKey(request: Request): string | undefined {
+  return request.headers.get("x-anthropic-key") ?? undefined;
 }
 
 export type ClaudeRequest = {
@@ -26,6 +37,7 @@ export type ClaudeRequest = {
   model?: string;
   maxTokens?: number;
   temperature?: number;
+  apiKey?: string;
 };
 
 export type ClaudeResponse = {
@@ -39,34 +51,10 @@ export type ClaudeResponse = {
 export async function callClaude(
   request: ClaudeRequest
 ): Promise<ClaudeResponse> {
-  if (getProvider() === "cli") {
-    const cliModel =
-      request.model === "claude-sonnet-4-6" || !request.model
-        ? "sonnet"
-        : request.model === "claude-opus-4-6"
-          ? "opus"
-          : request.model === "claude-haiku-4-5-20251001"
-            ? "haiku"
-            : request.model ?? "sonnet";
-
-    const cliResp = await callClaudeCli({
-      systemPrompt: request.systemPrompt,
-      userMessage: request.userMessage,
-      model: cliModel,
-    });
-
-    return {
-      content: cliResp.content,
-      model: cliResp.model,
-      inputTokens: cliResp.inputTokens,
-      outputTokens: cliResp.outputTokens,
-      stopReason: "end_turn",
-    };
-  }
-
+  const client = getClient(request.apiKey);
   const model = request.model ?? DEFAULT_MODEL;
 
-  const message = await anthropic.messages.create({
+  const message = await client.messages.create({
     model,
     max_tokens: request.maxTokens ?? 8192,
     temperature: request.temperature ?? 0.3,
@@ -92,9 +80,10 @@ export async function streamClaude(
   request: ClaudeRequest,
   onText: (chunk: string) => void
 ): Promise<ClaudeResponse> {
+  const client = getClient(request.apiKey);
   const model = request.model ?? DEFAULT_MODEL;
 
-  const stream = anthropic.messages.stream({
+  const stream = client.messages.stream({
     model,
     max_tokens: request.maxTokens ?? 8192,
     temperature: request.temperature ?? 0.3,

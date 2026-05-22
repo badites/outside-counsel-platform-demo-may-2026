@@ -1,7 +1,7 @@
-import { spawn } from "child_process";
 import { prisma } from "@/server/db";
 import { computeNps } from "@/server/insights";
 import { getCurrentUser } from "@/server/current-user";
+import { callClaude, resolveApiKey } from "@/server/ai/anthropic";
 
 const INSTRUCTIONS = `You are the AI assistant for SCG's Outside Counsel Directory — an internal tool used by the in-house legal team to find and evaluate law firms and individual lawyers.
 
@@ -175,60 +175,14 @@ async function getShortlistContext(userId: string): Promise<string> {
   return `Current shortlist (${rfp.invitations.length} firms): ${names}`;
 }
 
-function claudeGenerate(prompt: string): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const isWindows = process.platform === "win32";
-    const proc = spawn(
-      "claude",
-      [
-        "--print",
-        "--output-format",
-        "text",
-        "--model",
-        "sonnet",
-        "--max-turns",
-        "1",
-      ],
-      {
-        shell: isWindows,
-        stdio: ["pipe", "pipe", "pipe"],
-      }
-    );
-
-    const timer = setTimeout(() => {
-      proc.kill();
-      reject(new Error("Claude CLI timed out after 120 seconds"));
-    }, 120_000);
-
-    let stdout = "";
-    let stderr = "";
-    proc.stdout.on("data", (chunk: Buffer) => {
-      stdout += chunk.toString();
-    });
-    proc.stderr.on("data", (chunk: Buffer) => {
-      stderr += chunk.toString();
-    });
-    proc.on("close", (code) => {
-      clearTimeout(timer);
-      if (code === 0) resolve(stdout.trim());
-      else reject(new Error(stderr || `Claude CLI exited with code ${code}`));
-    });
-    proc.on("error", (err) => {
-      clearTimeout(timer);
-      reject(err);
-    });
-
-    proc.stdin.write(prompt);
-    proc.stdin.end();
-  });
-}
-
 export async function POST(request: Request) {
   const { messages } = (await request.json()) as { messages: ChatMessage[] };
 
   if (!messages || messages.length === 0) {
     return Response.json({ error: "No messages provided" }, { status: 400 });
   }
+
+  const apiKey = resolveApiKey(request);
 
   try {
     const user = await getCurrentUser();
@@ -245,20 +199,27 @@ export async function POST(request: Request) {
       .join("\n\n");
     const latestMessage = messages[messages.length - 1].content;
 
-    let fullPrompt = `${INSTRUCTIONS}\n\n`;
-    fullPrompt += `## ${shortlistContext}\n\n`;
-    fullPrompt += `=== DIRECTORY DATA (JSON) ===\n${directoryContext}\n=== END DATA ===\n\n`;
+    let userMessage = "";
     if (conversationHistory) {
-      fullPrompt += `Previous conversation:\n${conversationHistory}\n\n`;
+      userMessage += `Previous conversation:\n${conversationHistory}\n\n`;
     }
-    fullPrompt += `Human: ${latestMessage}\n\nRespond helpfully using the directory data above. Include action buttons where appropriate. Do not use any tools — all data you need is already provided.`;
+    userMessage += `Human: ${latestMessage}\n\nRespond helpfully using the directory data above. Include action buttons where appropriate. Do not use any tools — all data you need is already provided.`;
 
-    const assistantMessage = await claudeGenerate(fullPrompt);
+    const systemPrompt = `${INSTRUCTIONS}\n\n## ${shortlistContext}\n\n=== DIRECTORY DATA (JSON) ===\n${directoryContext}\n=== END DATA ===`;
 
-    return Response.json({ message: assistantMessage });
+    const response = await callClaude({
+      systemPrompt,
+      userMessage,
+      apiKey,
+    });
+
+    return Response.json({ message: response.content });
   } catch (err) {
     console.error("Chat API error:", err);
     const errorMessage = err instanceof Error ? err.message : "Unknown error";
+    if (errorMessage.includes("API key")) {
+      return Response.json({ error: errorMessage, needsApiKey: true }, { status: 401 });
+    }
     return Response.json({ error: errorMessage }, { status: 500 });
   }
 }
