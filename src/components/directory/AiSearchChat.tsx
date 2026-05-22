@@ -17,6 +17,7 @@ import {
   ArrowRight,
   FileText,
   Wand2,
+  Check,
 } from "lucide-react";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
@@ -146,15 +147,17 @@ function ActionButtonUI({
   action,
   onAction,
   disabled,
+  consumed,
 }: {
   action: ActionButton;
   onAction: (action: ActionButton) => void;
   disabled?: boolean;
+  consumed?: boolean;
 }) {
   const iconMap: Record<string, React.ReactNode> = {
-    add_shortlist: <Plus size={14} />,
+    add_shortlist: consumed ? <Check size={14} /> : <Plus size={14} />,
     view_shortlist: <ListChecks size={14} />,
-    approve_shortlist: <ArrowRight size={14} />,
+    approve_shortlist: consumed ? <Check size={14} /> : <ArrowRight size={14} />,
     rfp_wizard: <FileText size={14} />,
     rfp_ai: <Wand2 size={14} />,
   };
@@ -172,16 +175,23 @@ function ActionButtonUI({
       "border-purple-300 bg-purple-50 text-purple-700 hover:bg-purple-100",
   };
 
+  const consumedStyle = "border-gray-200 bg-gray-50 text-gray-400 cursor-default";
+
   return (
     <button
-      onClick={() => onAction(action)}
-      disabled={disabled}
-      className={`mt-1 inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-xs font-medium transition-colors disabled:opacity-40 ${
-        styleMap[action.type] ?? "border-gray-300 bg-gray-50 text-gray-700"
+      onClick={() => !consumed && onAction(action)}
+      disabled={disabled || consumed}
+      className={`mt-1 inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-xs font-medium transition-colors disabled:cursor-default disabled:opacity-50 ${
+        consumed
+          ? consumedStyle
+          : (styleMap[action.type] ?? "border-gray-300 bg-gray-50 text-gray-700")
       }`}
     >
       {iconMap[action.type]}
-      {action.label}
+      {consumed && action.type === "add_shortlist" ? "Added" : ""}
+      {consumed && action.type === "approve_shortlist" ? "Approved" : ""}
+      {!consumed ? action.label : ""}
+      {consumed && action.type !== "add_shortlist" && action.type !== "approve_shortlist" ? action.label : ""}
     </button>
   );
 }
@@ -192,10 +202,12 @@ function MessageBubble({
   message,
   onAction,
   isActionDisabled,
+  consumedActions,
 }: {
   message: Message;
-  onAction: (action: ActionButton) => void;
+  onAction: (action: ActionButton, messageId: string) => void;
   isActionDisabled?: boolean;
+  consumedActions: Set<string>;
 }) {
   const isUser = message.role === "user";
 
@@ -228,12 +240,14 @@ function MessageBubble({
 
               const action = parseActionLine(line);
               if (action) {
+                const actionKey = `${message.id}:${action.type}:${action.param ?? ""}`;
                 return (
                   <div key={i}>
                     <ActionButtonUI
                       action={action}
-                      onAction={onAction}
+                      onAction={(a) => onAction(a, message.id)}
                       disabled={isActionDisabled}
+                      consumed={consumedActions.has(actionKey)}
                     />
                   </div>
                 );
@@ -343,6 +357,7 @@ export function AiSearchChat() {
   const [shortlist, setShortlist] = useState<ShortlistFirm[]>([]);
   const [shortlistRfpId, setShortlistRfpId] = useState<string | null>(null);
   const [showShortlist, setShowShortlist] = useState(false);
+  const [consumedActions, setConsumedActions] = useState<Set<string>>(new Set());
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -368,6 +383,14 @@ export function AiSearchChat() {
       .catch(() => {});
   }, [isOpen]);
 
+  const markConsumed = useCallback((messageId: string, action: ActionButton) => {
+    setConsumedActions((prev) => {
+      const next = new Set(prev);
+      next.add(`${messageId}:${action.type}:${action.param ?? ""}`);
+      return next;
+    });
+  }, []);
+
   const addSystemMessage = useCallback((content: string) => {
     setMessages((prev) => [
       ...prev,
@@ -382,7 +405,8 @@ export function AiSearchChat() {
 
   // ─── Shortlist actions ──────────────────────────────────────────────────
 
-  async function handleAddToShortlist(firmId: string, firmName: string) {
+  async function handleAddToShortlist(firmId: string, firmName: string, messageId: string, action: ActionButton) {
+    markConsumed(messageId, action);
     try {
       const res = await fetch("/api/shortlist", {
         method: "POST",
@@ -418,13 +442,15 @@ export function AiSearchChat() {
     setShowShortlist(true);
   }
 
-  async function handleApproveShortlist() {
+  async function handleApproveShortlist(messageId: string, action: ActionButton) {
     if (shortlist.length === 0) {
       addSystemMessage(
         "Your shortlist is empty. Search for firms and add them first."
       );
       return;
     }
+
+    markConsumed(messageId, action);
 
     addSystemMessage(
       `Your shortlist with **${shortlist.length}** firm${shortlist.length !== 1 ? "s" : ""} is approved! How would you like to create the RFP?\n\n{{rfp_wizard}}\n{{rfp_ai}}`
@@ -445,18 +471,18 @@ export function AiSearchChat() {
 
   // ─── Action dispatch ────────────────────────────────────────────────────
 
-  function handleAction(action: ActionButton) {
+  function handleAction(action: ActionButton, messageId: string) {
     switch (action.type) {
       case "add_shortlist":
         if (action.param) {
-          handleAddToShortlist(action.param, action.label);
+          handleAddToShortlist(action.param, action.label, messageId, action);
         }
         break;
       case "view_shortlist":
         handleViewShortlist();
         break;
       case "approve_shortlist":
-        handleApproveShortlist();
+        handleApproveShortlist(messageId, action);
         break;
       case "rfp_wizard":
         handleRfpWizard();
@@ -473,6 +499,8 @@ export function AiSearchChat() {
     e.preventDefault();
     const trimmed = input.trim();
     if (!trimmed || isLoading) return;
+
+    if (!isOpen) setIsOpen(true);
 
     const userMsg: Message = {
       id: crypto.randomUUID(),
@@ -530,162 +558,191 @@ export function AiSearchChat() {
     }
   }
 
-  // ─── Closed state ───────────────────────────────────────────────────────
+  // ─── Inline trigger bar (always visible in page flow) ──────────────────
 
-  if (!isOpen) {
-    return (
-      <button
-        onClick={() => setIsOpen(true)}
-        className="flex w-full items-center gap-3 rounded-lg border border-teal-200 bg-gradient-to-r from-teal-50 to-amber-50/30 px-4 py-3 text-left transition-all hover:border-teal-300 hover:shadow-md"
-      >
-        <div className="flex h-9 w-9 items-center justify-center rounded-full bg-teal-600">
-          <Sparkles size={16} className="text-white" />
+  const triggerBar = (
+    <form onSubmit={handleSubmit} className="relative">
+      <div className="flex items-center gap-3 rounded-lg border border-teal-200 bg-gradient-to-r from-teal-50 to-amber-50/30 px-4 py-2.5 transition-all hover:border-teal-300 hover:shadow-md">
+        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-teal-600">
+          <Sparkles size={14} className="text-white" />
         </div>
-        <div className="flex-1">
-          <p className="text-sm font-medium text-gray-900">
-            AI-Assisted Search
-          </p>
-          <p className="text-xs text-gray-500">
-            Describe your legal needs in plain language and get personalized
-            recommendations
-          </p>
-        </div>
-        <MessageSquare size={18} className="text-teal-500" />
-      </button>
-    );
-  }
-
-  // ─── Open state ─────────────────────────────────────────────────────────
-
-  return (
-    <div className="rounded-lg border border-teal-200 bg-white shadow-lg">
-      {/* Header */}
-      <div className="flex items-center justify-between border-b border-gray-200 px-4 py-3">
-        <div className="flex items-center gap-2">
-          <div className="flex h-7 w-7 items-center justify-center rounded-full bg-teal-600">
-            <Sparkles size={14} className="text-white" />
-          </div>
-          <div>
-            <h3 className="text-sm font-semibold text-gray-900">
-              AI Counsel Finder
-            </h3>
-            <p className="text-[10px] text-gray-400">Powered by Claude</p>
-          </div>
-        </div>
-        <div className="flex items-center gap-1.5">
-          {shortlist.length > 0 && (
-            <button
-              onClick={() => setShowShortlist((v) => !v)}
-              className={`flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium transition-colors ${
-                showShortlist
-                  ? "bg-teal-600 text-white"
-                  : "bg-teal-100 text-teal-700 hover:bg-teal-200"
-              }`}
-            >
-              <ListChecks size={12} />
-              {shortlist.length}
-            </button>
-          )}
-          <button
-            onClick={() => setIsOpen(false)}
-            className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
-          >
-            <X size={16} />
-          </button>
-        </div>
-      </div>
-
-      {/* Shortlist panel */}
-      {showShortlist && (
-        <ShortlistPanel
-          firms={shortlist}
-          onRemove={handleRemoveFromShortlist}
-          onClose={() => setShowShortlist(false)}
+        <input
+          type="text"
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          onFocus={() => { if (messages.length > 0) setIsOpen(true); }}
+          placeholder="Describe your legal needs..."
+          className="flex-1 bg-transparent text-sm text-gray-900 placeholder-gray-500 outline-none"
         />
-      )}
-
-      {/* Messages */}
-      <div className="h-[400px] overflow-y-auto px-4 py-3">
-        {messages.length === 0 && (
-          <div className="flex h-full flex-col items-center justify-center text-center">
-            <Bot size={32} className="mb-3 text-gray-300" />
-            <p className="text-sm font-medium text-gray-500">
-              How can I help you find counsel?
-            </p>
-            <p className="mt-1 text-xs text-gray-400">Try something like:</p>
-            <div className="mt-3 space-y-2">
-              {[
-                "Find me a litigation firm in Thailand with strong Chambers rankings",
-                "Who are the top M&A lawyers we've worked with?",
-                "I need a cost-effective boutique firm for an IP dispute in Singapore",
-                "Compare Baker McKenzie and Linklaters for banking work",
-              ].map((suggestion) => (
-                <button
-                  key={suggestion}
-                  onClick={() => {
-                    setInput(suggestion);
-                    inputRef.current?.focus();
-                  }}
-                  className="block w-full rounded-md border border-gray-200 px-3 py-2 text-left text-xs text-gray-600 hover:border-teal-300 hover:bg-teal-50/50"
-                >
-                  &ldquo;{suggestion}&rdquo;
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
-
-        <div className="space-y-4">
-          {messages.map((msg) => (
-            <MessageBubble
-              key={msg.id}
-              message={msg}
-              onAction={handleAction}
-              isActionDisabled={isLoading}
-            />
-          ))}
-          {isLoading && (
-            <div className="flex gap-3">
-              <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-amber-100">
-                <Bot size={14} className="text-amber-700" />
-              </div>
-              <div className="flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3.5 py-2.5 text-sm text-gray-500">
-                <Loader2 size={14} className="animate-spin" />
-                Searching the directory...
-              </div>
-            </div>
-          )}
-          {error && (
-            <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-600">
-              {error}
-            </div>
-          )}
-          <div ref={messagesEndRef} />
-        </div>
-      </div>
-
-      {/* Input */}
-      <form onSubmit={handleSubmit} className="border-t border-gray-200 p-3">
-        <div className="flex items-end gap-2">
-          <textarea
-            ref={inputRef}
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={handleKeyDown}
-            placeholder="Describe your legal needs..."
-            rows={1}
-            className="flex-1 resize-none rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-teal-500 focus:outline-none"
-            style={{ minHeight: "38px", maxHeight: "100px" }}
-          />
+        {input.trim() ? (
           <button
             type="submit"
-            disabled={isLoading || !input.trim()}
-            className="flex h-[38px] w-[38px] items-center justify-center rounded-md bg-teal-600 text-white hover:bg-teal-700 disabled:opacity-40"
+            disabled={isLoading}
+            className="flex h-8 w-8 items-center justify-center rounded-md bg-teal-600 text-white hover:bg-teal-700 disabled:opacity-40"
           >
-            <Send size={16} />
+            <Send size={14} />
           </button>
+        ) : messages.length > 0 ? (
+          <button
+            type="button"
+            onClick={() => setIsOpen(true)}
+            className="flex h-8 w-8 items-center justify-center rounded-md bg-teal-100 text-teal-600 hover:bg-teal-200"
+          >
+            <MessageSquare size={14} />
+          </button>
+        ) : null}
+      </div>
+    </form>
+  );
+
+  // ─── Floating drawer (overlay, doesn't push content) ───────────────────
+
+  const drawer = isOpen && (
+    <div className="fixed inset-0 z-50 flex justify-end">
+      {/* Backdrop */}
+      <div
+        className="absolute inset-0 bg-black/20 backdrop-blur-[1px]"
+        onClick={() => setIsOpen(false)}
+      />
+
+      {/* Panel */}
+      <div className="relative flex h-full w-full max-w-md flex-col bg-white shadow-2xl">
+        {/* Header */}
+        <div className="flex items-center justify-between border-b border-gray-200 px-4 py-3">
+          <div className="flex items-center gap-2">
+            <div className="flex h-7 w-7 items-center justify-center rounded-full bg-teal-600">
+              <Sparkles size={14} className="text-white" />
+            </div>
+            <div>
+              <h3 className="text-sm font-semibold text-gray-900">
+                AI Counsel Finder
+              </h3>
+              <p className="text-[10px] text-gray-400">Powered by Claude</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-1.5">
+            {shortlist.length > 0 && (
+              <button
+                onClick={() => setShowShortlist((v) => !v)}
+                className={`flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium transition-colors ${
+                  showShortlist
+                    ? "bg-teal-600 text-white"
+                    : "bg-teal-100 text-teal-700 hover:bg-teal-200"
+                }`}
+              >
+                <ListChecks size={12} />
+                {shortlist.length}
+              </button>
+            )}
+            <button
+              onClick={() => setIsOpen(false)}
+              className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
+            >
+              <X size={16} />
+            </button>
+          </div>
         </div>
-      </form>
+
+        {/* Shortlist panel */}
+        {showShortlist && (
+          <ShortlistPanel
+            firms={shortlist}
+            onRemove={handleRemoveFromShortlist}
+            onClose={() => setShowShortlist(false)}
+          />
+        )}
+
+        {/* Messages */}
+        <div className="flex-1 overflow-y-auto px-4 py-3">
+          {messages.length === 0 && (
+            <div className="flex h-full flex-col items-center justify-center text-center">
+              <Bot size={32} className="mb-3 text-gray-300" />
+              <p className="text-sm font-medium text-gray-500">
+                How can I help you find counsel?
+              </p>
+              <p className="mt-1 text-xs text-gray-400">Try something like:</p>
+              <div className="mt-3 space-y-2">
+                {[
+                  "Find me a litigation firm in Thailand with strong Chambers rankings",
+                  "Who are the top M&A lawyers we've worked with?",
+                  "I need a cost-effective boutique firm for an IP dispute in Singapore",
+                  "Compare Baker McKenzie and Linklaters for banking work",
+                ].map((suggestion) => (
+                  <button
+                    key={suggestion}
+                    onClick={() => {
+                      setInput(suggestion);
+                      inputRef.current?.focus();
+                    }}
+                    className="block w-full rounded-md border border-gray-200 px-3 py-2 text-left text-xs text-gray-600 hover:border-teal-300 hover:bg-teal-50/50"
+                  >
+                    &ldquo;{suggestion}&rdquo;
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <div className="space-y-4">
+            {messages.map((msg) => (
+              <MessageBubble
+                key={msg.id}
+                message={msg}
+                onAction={handleAction}
+                isActionDisabled={isLoading}
+                consumedActions={consumedActions}
+              />
+            ))}
+            {isLoading && (
+              <div className="flex gap-3">
+                <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-amber-100">
+                  <Bot size={14} className="text-amber-700" />
+                </div>
+                <div className="flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3.5 py-2.5 text-sm text-gray-500">
+                  <Loader2 size={14} className="animate-spin" />
+                  Searching the directory...
+                </div>
+              </div>
+            )}
+            {error && (
+              <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-600">
+                {error}
+              </div>
+            )}
+            <div ref={messagesEndRef} />
+          </div>
+        </div>
+
+        {/* Input */}
+        <form onSubmit={handleSubmit} className="border-t border-gray-200 p-3">
+          <div className="flex items-end gap-2">
+            <textarea
+              ref={inputRef}
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={handleKeyDown}
+              placeholder="Describe your legal needs..."
+              rows={1}
+              className="flex-1 resize-none rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-teal-500 focus:outline-none"
+              style={{ minHeight: "38px", maxHeight: "100px" }}
+            />
+            <button
+              type="submit"
+              disabled={isLoading || !input.trim()}
+              className="flex h-[38px] w-[38px] items-center justify-center rounded-md bg-teal-600 text-white hover:bg-teal-700 disabled:opacity-40"
+            >
+              <Send size={16} />
+            </button>
+          </div>
+        </form>
+      </div>
     </div>
+  );
+
+  return (
+    <>
+      {triggerBar}
+      {drawer}
+    </>
   );
 }

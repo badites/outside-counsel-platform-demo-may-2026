@@ -10,6 +10,7 @@ import { SetUrgencyStep } from "@/components/rfp/steps/SetUrgencyStep";
 import { RfpDetailsStep } from "@/components/rfp/steps/RfpDetailsStep";
 import { EvaluationCriteriaStep } from "@/components/rfp/steps/EvaluationCriteriaStep";
 import { SelectFirmsStep } from "@/components/rfp/steps/SelectFirmsStep";
+import { AiRfpAssistant } from "@/components/rfp/AiRfpAssistant";
 import { ReviewAndSendClient } from "./review-client";
 import type { ComplexityTier } from "@/generated/prisma/client";
 
@@ -19,8 +20,46 @@ export default async function NewRfpPage({
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const params = await searchParams;
+  const isAiMode = params.ai === "true";
   const step = Number(params.step ?? "1");
   const draftId = typeof params.draftId === "string" ? params.draftId : undefined;
+
+  if (isAiMode) {
+    const firmIdStr = typeof params.firmIds === "string" ? params.firmIds : "";
+    const firmIdList = firmIdStr.split(",").filter(Boolean);
+
+    const [firms, jurisdictions, practiceAreas] = await Promise.all([
+      firmIdList.length > 0
+        ? prisma.firm.findMany({
+            where: { id: { in: firmIdList } },
+            select: { id: true, name: true },
+          })
+        : Promise.resolve([]),
+      prisma.jurisdiction.findMany({
+        select: { id: true, name: true },
+        orderBy: { name: "asc" },
+      }),
+      prisma.practiceArea.findMany({
+        select: { id: true, name: true },
+        orderBy: { name: "asc" },
+      }),
+    ]);
+
+    const firmNames = Object.fromEntries(firms.map((f) => [f.id, f.name]));
+
+    return (
+      <div>
+        <h1 className="mb-6 text-2xl font-semibold text-gray-900">New RFP</h1>
+        <AiRfpAssistant
+          firmIds={firmIdList}
+          firmNames={firmNames}
+          draftId={draftId}
+          jurisdictions={jurisdictions}
+          practiceAreas={practiceAreas}
+        />
+      </div>
+    );
+  }
 
   const stepContent = await renderStep(step, params, draftId);
 
