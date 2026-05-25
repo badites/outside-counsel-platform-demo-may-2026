@@ -5,6 +5,8 @@ import { updateFirmAction } from "@/server/actions/firm-actions";
 import { getFirmById } from "@/server/firms";
 import { listFirmsForSelect } from "@/server/reference-data";
 
+export const dynamic = "force-dynamic";
+
 interface EditFirmPageProps {
   params: Promise<{ id: string }>;
 }

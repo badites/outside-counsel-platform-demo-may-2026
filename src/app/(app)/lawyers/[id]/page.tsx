@@ -35,6 +35,8 @@ import {
 } from "@/lib/schemas";
 import type { RankingPublisherEnum, LawyerRankingCategoryEnum } from "@/lib/schemas";
 
+export const dynamic = "force-dynamic";
+
 interface LawyerDetailPageProps {
   params: Promise<{ id: string }>;
 }

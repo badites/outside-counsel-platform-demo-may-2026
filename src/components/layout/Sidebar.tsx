@@ -54,13 +54,16 @@ export function Sidebar() {
         )}
         <button
           onClick={() => setCollapsed(!collapsed)}
+          aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+          aria-expanded={!collapsed}
+          aria-controls="sidebar-nav"
           className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
         >
           {collapsed ? <ChevronRight size={16} /> : <ChevronLeft size={16} />}
         </button>
       </div>
 
-      <nav className="flex-1 space-y-1 px-2 py-3">
+      <nav id="sidebar-nav" role="navigation" aria-label="Main navigation" className="flex-1 space-y-1 px-2 py-3">
         {navItems.map((item) => {
           const isActive =
             pathname === item.href || pathname.startsWith(item.href + "/");

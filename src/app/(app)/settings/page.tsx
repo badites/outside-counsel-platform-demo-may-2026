@@ -4,6 +4,8 @@ import { getUserPreference } from "@/server/preferences";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { PreferenceForm } from "@/components/settings/PreferenceForm";
 
+export const dynamic = "force-dynamic";
+
 export default async function SettingsPage() {
   const user = await getCurrentUser();
   const weights = await getUserPreference(user.id);

@@ -3,6 +3,8 @@ import { prisma } from "@/server/db";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { FirmResponseForm } from "./response-form";
 
+export const dynamic = "force-dynamic";
+
 export default async function RespondPage({
   params,
 }: {

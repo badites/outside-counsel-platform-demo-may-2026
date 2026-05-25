@@ -3,6 +3,8 @@ import { getRfpWithInvitations } from "@/server/rfp/queries";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { EvaluationForm } from "./evaluation-form";
 
+export const dynamic = "force-dynamic";
+
 export default async function EvaluatePage({
   params,
 }: {

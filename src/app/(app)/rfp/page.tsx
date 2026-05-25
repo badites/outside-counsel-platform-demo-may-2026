@@ -4,6 +4,8 @@ import { PageHeader } from "@/components/shared/PageHeader";
 import { RfpStatusBadge } from "@/components/rfp/RfpStatusBadge";
 import { Plus } from "lucide-react";
 
+export const dynamic = "force-dynamic";
+
 export default async function RfpListPage() {
   const [rfps, counts] = await Promise.all([listRfps(), countRfpsByStatus()]);
 

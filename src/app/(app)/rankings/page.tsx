@@ -14,6 +14,8 @@ import {
 import type { RankingPublisherEnum, LawyerRankingCategoryEnum } from "@/lib/schemas";
 import { RankingFilters } from "./RankingFilters";
 
+export const dynamic = "force-dynamic";
+
 const publisherBadge: Record<RankingPublisherEnum, "teal" | "blue" | "amber" | "green"> = {
   CHAMBERS: "teal",
   LEGAL500: "blue",

@@ -43,6 +43,8 @@ import {
 } from "@/lib/schemas";
 import type { FirmTypeEnum, RankingPublisherEnum, BenchmarkRoleEnum, BenchmarkSourceEnum } from "@/lib/schemas";
 
+export const dynamic = "force-dynamic";
+
 const firmTypeBadgeVariant: Record<FirmTypeEnum, "teal" | "amber" | "blue" | "gray"> = {
   FULL_SERVICE: "teal",
   BOUTIQUE: "amber",

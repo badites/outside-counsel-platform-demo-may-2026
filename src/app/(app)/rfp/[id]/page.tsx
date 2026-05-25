@@ -7,6 +7,8 @@ import { RfpStatusBadge } from "@/components/rfp/RfpStatusBadge";
 import { InvitationStatusTracker } from "@/components/rfp/InvitationStatusTracker";
 import { ComparisonReport } from "@/components/rfp/ComparisonReport";
 
+export const dynamic = "force-dynamic";
+
 export default async function RfpDetailPage({
   params,
 }: {

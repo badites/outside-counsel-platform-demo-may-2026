@@ -15,6 +15,8 @@ import { AlumniSearch } from "@/components/network/AlumniSearch";
 import { FIRM_TYPE_LABELS, LAWYER_ROLE_LABELS } from "@/lib/schemas";
 import type { FirmTypeEnum, LawyerRoleEnum } from "@/lib/schemas";
 
+export const dynamic = "force-dynamic";
+
 interface NetworkPageProps {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }

@@ -14,6 +14,8 @@ import { AiRfpAssistant } from "@/components/rfp/AiRfpAssistant";
 import { ReviewAndSendClient } from "./review-client";
 import type { ComplexityTier } from "@/generated/prisma/client";
 
+export const dynamic = "force-dynamic";
+
 export default async function NewRfpPage({
   searchParams,
 }: {

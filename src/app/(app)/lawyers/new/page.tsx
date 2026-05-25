@@ -2,6 +2,8 @@ import { PageHeader } from "@/components/ui/PageHeader";
 import { LawyerForm } from "@/components/forms/LawyerForm";
 import { createLawyerAction } from "@/server/actions/lawyer-actions";
 
+export const dynamic = "force-dynamic";
+
 export default function NewLawyerPage() {
   return (
     <div className="mx-auto max-w-2xl">

@@ -13,8 +13,12 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Outside Counsel Directory",
-  description: "Evaluate, compare, and select law firms and lawyers",
+  title: {
+    template: "%s | Outside Counsel Platform",
+    default: "Outside Counsel Platform",
+  },
+  description:
+    "Manage outside counsel matters, invoices, budgets, and spend analytics.",
 };
 
 export default function RootLayout({

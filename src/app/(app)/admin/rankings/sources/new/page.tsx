@@ -2,6 +2,8 @@ import { PageHeader } from "@/components/ui/PageHeader";
 import { RankingSourceForm } from "@/components/forms/RankingSourceForm";
 import { createRankingSourceAction } from "@/server/actions/ranking-actions";
 
+export const dynamic = "force-dynamic";
+
 export default function NewRankingSourcePage() {
   return (
     <div className="mx-auto max-w-2xl">

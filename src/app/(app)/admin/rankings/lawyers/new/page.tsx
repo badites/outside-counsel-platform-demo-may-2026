@@ -4,6 +4,8 @@ import { createLawyerRankingAction } from "@/server/actions/ranking-actions";
 import { listLawyersForSelect, listPracticeAreas, listJurisdictions } from "@/server/reference-data";
 import { listRankingSources } from "@/server/rankings";
 
+export const dynamic = "force-dynamic";
+
 export default async function NewLawyerRankingPage() {
   const [lawyers, practiceAreas, jurisdictions, sources] = await Promise.all([
     listLawyersForSelect(),

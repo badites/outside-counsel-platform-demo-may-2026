@@ -4,6 +4,8 @@ import { LawyerForm } from "@/components/forms/LawyerForm";
 import { updateLawyerAction } from "@/server/actions/lawyer-actions";
 import { getLawyerById } from "@/server/lawyers";
 
+export const dynamic = "force-dynamic";
+
 interface EditLawyerPageProps {
   params: Promise<{ id: string }>;
 }

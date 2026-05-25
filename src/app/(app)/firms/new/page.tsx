@@ -3,6 +3,8 @@ import { FirmForm } from "@/components/forms/FirmForm";
 import { createFirmAction } from "@/server/actions/firm-actions";
 import { listFirmsForSelect } from "@/server/reference-data";
 
+export const dynamic = "force-dynamic";
+
 export default async function NewFirmPage() {
   const firms = await listFirmsForSelect();
 
