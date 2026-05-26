@@ -2,6 +2,7 @@ import { prisma } from "@/server/db";
 import { computeNps } from "@/server/insights";
 import { getCurrentUser } from "@/server/current-user";
 import { streamClaude } from "@/server/ai/anthropic";
+import { getAggregatedInsights } from "@/server/timesheet";
 
 const INSTRUCTIONS = `You are the AI assistant for SCG's Outside Counsel Directory — an internal tool used by the in-house legal team to find and evaluate law firms and individual lawyers.
 
@@ -13,6 +14,23 @@ Your role:
 - Proactively suggest related searches or deeper profiles when useful
 - Be concise but informative — this is for busy lawyers
 - Guide the user through a shortlisting workflow: recommend → shortlist → approve → RFP
+
+## TIMESHEET INTELLIGENCE (CRITICAL — USE THIS)
+
+You have access to SCG's internal timesheet data showing which firms the team ACTUALLY works with, how often, and what for. This is MORE valuable than rankings alone because it reflects real engagement history.
+
+When recommending firms, ALWAYS consider timesheet intelligence:
+1. **Firm mentions** tell you which firms SCG already has relationships with and how deeply engaged they are (higher mention count = stronger relationship)
+2. **Outsource patterns** tell you what % of each practice area gets sent to external counsel vs handled in-house. If a practice area has a low outsource rate, mention that the team usually handles it internally.
+3. **Matter classifications** show what specific matters the team works on, their complexity, and which external firms are involved.
+4. **Key insights** are AI-generated observations about the team's work patterns.
+
+PRIORITIZE firms the team already works with when they are a good fit. A firm with 42 timesheet mentions and relevant practice coverage is a STRONGER recommendation than a highly-ranked firm with zero engagement history. However, also suggest new options when appropriate — just flag them as "not yet in your engagement history."
+
+When presenting results, weave in timesheet context naturally:
+- "Your team already works extensively with [Firm] on [practice area] (X mentions in your timesheets)"
+- "Based on your outsource patterns, 85% of M&A work goes to external counsel — [Firm] handles most of it"
+- "This firm isn't in your engagement history yet, but their rankings suggest they'd be worth exploring"
 
 CRITICAL FORMATTING RULES:
 - NEVER show raw database IDs to the user. They are ugly and meaningless.
@@ -153,6 +171,53 @@ async function getDirectoryContext(): Promise<string> {
   return JSON.stringify({ firms: firmSummaries, lawyers: lawyerSummaries });
 }
 
+async function getTimesheetContext(): Promise<string> {
+  try {
+    const { mergedAnalysis } = await getAggregatedInsights();
+    if (!mergedAnalysis) return "";
+
+    const { summary, firmMentions, outsourcePatterns, matterClassifications, keyInsights } = mergedAnalysis;
+
+    const parts: string[] = [];
+
+    parts.push(`## TIMESHEET DATA (from ${summary.totalEntries} timesheet entries, ${summary.totalMatters} matters, ${summary.lawyerCount} in-house lawyers)`);
+
+    if (firmMentions.length > 0) {
+      parts.push("\n### Firm Engagement History (from timesheet narratives)");
+      for (const fm of firmMentions) {
+        const matchTag = fm.matchedFirmId ? ` [OCP ID: ${fm.matchedFirmId}]` : " [NOT in directory]";
+        parts.push(`- **${fm.name}**: ${fm.mentionCount} mentions | Type: ${fm.entityType} | Matters: ${fm.matters.join(", ")} | Activities: ${fm.activityTypes.join(", ")}${matchTag}`);
+      }
+    }
+
+    if (outsourcePatterns.length > 0) {
+      parts.push("\n### Outsource Patterns (% of work sent to external counsel)");
+      for (const op of outsourcePatterns) {
+        parts.push(`- **${op.practiceArea}**: ${op.outsourceRate}% outsourced | Typical firms: ${op.typicalFirms.join(", ")} | ${op.observation}`);
+      }
+    }
+
+    if (matterClassifications.length > 0) {
+      parts.push("\n### Active Matters");
+      for (const mc of matterClassifications) {
+        const ext = mc.usesExternalCounsel ? `External: ${mc.externalFirms.join(", ")}` : "Handled in-house";
+        parts.push(`- ${mc.matterNo}: ${mc.name} (${mc.practiceArea}, ${mc.complexity}) — ${ext}`);
+      }
+    }
+
+    if (keyInsights.length > 0) {
+      parts.push("\n### Key Insights from Timesheet Analysis");
+      for (const insight of keyInsights) {
+        parts.push(`- ${insight}`);
+      }
+    }
+
+    return parts.join("\n");
+  } catch {
+    return "";
+  }
+}
+
 async function getShortlistContext(userId: string): Promise<string> {
   const rfp = await prisma.rfp.findFirst({
     where: { title: "__ai_shortlist__", status: "DRAFT", createdById: userId },
@@ -184,9 +249,10 @@ export async function POST(request: Request) {
 
   try {
     const user = await getCurrentUser();
-    const [directoryContext, shortlistContext] = await Promise.all([
+    const [directoryContext, shortlistContext, timesheetContext] = await Promise.all([
       getDirectoryContext(),
       getShortlistContext(user.id),
+      getTimesheetContext(),
     ]);
 
     const conversationHistory = messages
@@ -203,7 +269,7 @@ export async function POST(request: Request) {
     }
     userMessage += `Human: ${latestMessage}\n\nRespond helpfully using the directory data above. Include action buttons where appropriate. Do not use any tools — all data you need is already provided.`;
 
-    const systemPrompt = `${INSTRUCTIONS}\n\n## ${shortlistContext}\n\n=== DIRECTORY DATA (JSON) ===\n${directoryContext}\n=== END DATA ===`;
+    const systemPrompt = `${INSTRUCTIONS}\n\n## ${shortlistContext}\n\n${timesheetContext ? `=== TIMESHEET INTELLIGENCE ===\n${timesheetContext}\n=== END TIMESHEET ===\n\n` : ""}=== DIRECTORY DATA (JSON) ===\n${directoryContext}\n=== END DATA ===`;
 
     const encoder = new TextEncoder();
     const stream = new ReadableStream({
