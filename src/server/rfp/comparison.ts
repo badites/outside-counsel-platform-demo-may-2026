@@ -1,5 +1,6 @@
 import { prisma } from "@/server/db";
 import { callClaude } from "@/server/ai/anthropic";
+import { getAiBriefing } from "@/server/platform-settings";
 
 export async function shouldAutoGenerate(rfpId: string): Promise<boolean> {
   const invitations = await prisma.rfpInvitation.findMany({
@@ -26,7 +27,7 @@ export async function generateComparisonReport(
       invitations: {
         where: { status: "SUBMITTED" },
         include: {
-          firm: { select: { name: true, firmType: true } },
+          firm: { select: { name: true, firmType: true, internalNotes: true } },
           evaluations: true,
         },
       },
@@ -71,17 +72,20 @@ export async function generateComparisonReport(
         staffing = inv.staffingPlan ?? "Not provided";
       }
 
+      const notes = inv.firm.internalNotes ? `\nInternal notes (confidential — from SCG Legal Operations): ${inv.firm.internalNotes}` : "";
       return `## Firm ${i + 1}: ${inv.firm.name} (${inv.firm.firmType})
 Total fee proposal: ${feeDisplay}${phaseBreakdown}
 Staffing plan: ${staffing}
 AI disclosure: ${inv.aiDisclosure ?? "None provided"}
-Response document: ${inv.responseDocument ?? "Not provided"}`;
+Response document: ${inv.responseDocument ?? "Not provided"}${notes}`;
     })
     .join("\n\n");
 
   const criteriaList = criteria
     .map((c) => `- ${c.name} (weight: ${c.weight}%)`)
     .join("\n");
+
+  const aiBriefing = await getAiBriefing();
 
   const prompt = `Compare the following law firm proposals for this RFP and produce a structured evaluation report.
 
@@ -95,7 +99,7 @@ Evaluation criteria:
 ${criteriaList || "No formal criteria set — evaluate on value, capability, and pricing."}
 
 ${firmSummaries}
-
+${aiBriefing ? `\nINTERNAL KNOWLEDGE BRIEFING (from SCG Legal Operations — factor this into your evaluation):\n${aiBriefing}\n` : ""}
 Produce a report with these sections:
 1. EXECUTIVE SUMMARY — 3-4 sentences on overall assessment
 2. FIRM-BY-FIRM ANALYSIS — for each firm: strengths, weaknesses, risks
@@ -115,7 +119,7 @@ Be specific and actionable. This report goes to the General Counsel.`;
 
   const response = await callClaude({
     systemPrompt:
-      "You are an expert legal operations advisor evaluating outside counsel RFP responses for SCG (Siam Cement Group). Be analytical, fair, and specific. Produce a professional report suitable for GC review. No markdown headers larger than ##.",
+      "You are an expert legal operations advisor evaluating outside counsel RFP responses for SCG (Siam Cement Group). Be analytical, fair, and specific. If internal notes are provided for any firm, factor them into your evaluation — they reflect the in-house team's institutional knowledge and prior experience with that firm. Produce a professional report suitable for GC review. No markdown headers larger than ##.",
     userMessage: prompt,
   });
 

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/server/db";
 import { callClaude } from "@/server/ai/anthropic";
+import { getAiBriefing } from "@/server/platform-settings";
 
 export const dynamic = "force-dynamic";
 
@@ -33,7 +34,7 @@ export async function POST(
       invitations: {
         where: { status: "SUBMITTED" },
         include: {
-          firm: { select: { name: true, firmType: true, shortName: true } },
+          firm: { select: { name: true, firmType: true, shortName: true, internalNotes: true } },
         },
       },
     },
@@ -63,11 +64,15 @@ export async function POST(
         }
       } catch { /* ignore */ }
 
+      const notes = inv.firm.internalNotes ? `\n  Internal notes (confidential): ${inv.firm.internalNotes}` : "";
       return `- ${inv.firm.name}: Total fee ${fee}${phaseInfo}
   Staffing: ${inv.staffingPlan ?? "N/A"}
-  Response: ${inv.responseDocument ?? "Not provided"}`;
+  Response: ${inv.responseDocument ?? "Not provided"}${notes}`;
     })
     .join("\n");
+
+  // Fetch global AI briefing
+  const aiBriefing = await getAiBriefing();
 
   // Build conversation context
   const historyText = conversationHistory
@@ -94,7 +99,7 @@ Pricing requirements: ${rfp.pricingRequirements ?? "Standard"}
 Additional requirements: ${rfp.additionalRequirements ?? "None"}
 
 FIRM PROPOSALS:
-${firmContext}`;
+${firmContext}${aiBriefing ? `\n\nINTERNAL KNOWLEDGE BRIEFING (from SCG Legal Operations — use this to inform your analysis):\n${aiBriefing}` : ""}`;
 
   const userMessage = `CURRENT REPORT:
 ${currentReport}
