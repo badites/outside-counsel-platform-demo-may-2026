@@ -574,6 +574,8 @@ export function AiSearchChat() {
       timestamp: new Date(),
     };
 
+    const assistantId = crypto.randomUUID();
+
     setMessages((prev) => [...prev, userMsg]);
     setInput("");
     setIsLoading(true);
@@ -594,29 +596,60 @@ export function AiSearchChat() {
         body: JSON.stringify({ messages: chatHistory }),
       });
 
-      const data = await res.json();
-
-      if (data.needsApiKey) {
-        showKeyPrompt();
-        setError("Please configure your Anthropic API key to use AI features.");
+      // Non-streaming error response (JSON)
+      const contentType = res.headers.get("content-type") ?? "";
+      if (contentType.includes("application/json")) {
+        const data = await res.json();
+        if (data.needsApiKey) {
+          showKeyPrompt();
+          setError("Please configure your Anthropic API key to use AI features.");
+        } else {
+          setError(data.error ?? "Something went wrong");
+        }
         return;
       }
 
-      if (!res.ok) {
-        setError(data.error ?? "Something went wrong");
-        return;
+      // Streaming response — create assistant message and fill progressively
+      setMessages((prev) => [
+        ...prev,
+        { id: assistantId, role: "assistant" as const, content: "", timestamp: new Date() },
+      ]);
+
+      const reader = res.body!.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() ?? "";
+
+        for (const line of lines) {
+          if (!line.trim()) continue;
+          try {
+            const data = JSON.parse(line);
+            if (data.t) {
+              setMessages((prev) =>
+                prev.map((m) =>
+                  m.id === assistantId
+                    ? { ...m, content: m.content + data.t }
+                    : m
+                )
+              );
+            } else if (data.error) {
+              setError(data.error);
+            }
+          } catch {
+            /* skip malformed lines */
+          }
+        }
       }
-
-      const assistantMsg: Message = {
-        id: crypto.randomUUID(),
-        role: "assistant",
-        content: data.message,
-        timestamp: new Date(),
-      };
-
-      setMessages((prev) => [...prev, assistantMsg]);
     } catch {
       setError("Failed to connect. Check your network and try again.");
+      setMessages((prev) => prev.filter((m) => m.id !== assistantId));
     } finally {
       setIsLoading(false);
     }

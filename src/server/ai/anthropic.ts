@@ -156,8 +156,8 @@ export async function streamClaude(
 
   const useFileArg = process.platform !== "win32";
   const finalArgs = useFileArg
-    ? ["-p", "--model", model, "--output-format", "stream-json", "--system-prompt", request.systemPrompt]
-    : ["-p", "--model", model, "--output-format", "stream-json"];
+    ? ["-p", "--verbose", "--model", model, "--output-format", "stream-json", "--system-prompt", request.systemPrompt]
+    : ["-p", "--verbose", "--model", model, "--output-format", "stream-json"];
 
   const stdinContent = useFileArg
     ? request.userMessage

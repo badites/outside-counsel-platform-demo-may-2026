@@ -1,7 +1,7 @@
 import { prisma } from "@/server/db";
 import { computeNps } from "@/server/insights";
 import { getCurrentUser } from "@/server/current-user";
-import { callClaude } from "@/server/ai/anthropic";
+import { streamClaude } from "@/server/ai/anthropic";
 
 const INSTRUCTIONS = `You are the AI assistant for SCG's Outside Counsel Directory — an internal tool used by the in-house legal team to find and evaluate law firms and individual lawyers.
 
@@ -205,12 +205,40 @@ export async function POST(request: Request) {
 
     const systemPrompt = `${INSTRUCTIONS}\n\n## ${shortlistContext}\n\n=== DIRECTORY DATA (JSON) ===\n${directoryContext}\n=== END DATA ===`;
 
-    const response = await callClaude({
-      systemPrompt,
-      userMessage,
+    const encoder = new TextEncoder();
+    const stream = new ReadableStream({
+      async start(controller) {
+        try {
+          await streamClaude(
+            { systemPrompt, userMessage },
+            (chunk) => {
+              controller.enqueue(
+                encoder.encode(JSON.stringify({ t: chunk }) + "\n")
+              );
+            }
+          );
+          controller.enqueue(
+            encoder.encode(JSON.stringify({ done: true }) + "\n")
+          );
+          controller.close();
+        } catch (err) {
+          const msg =
+            err instanceof Error ? err.message : "Unknown error";
+          controller.enqueue(
+            encoder.encode(JSON.stringify({ error: msg }) + "\n")
+          );
+          controller.close();
+        }
+      },
     });
 
-    return Response.json({ message: response.content });
+    return new Response(stream, {
+      headers: {
+        "Content-Type": "text/plain; charset=utf-8",
+        "Cache-Control": "no-cache",
+        "X-Content-Type-Options": "nosniff",
+      },
+    });
   } catch (err) {
     console.error("Chat API error:", err);
     const errorMessage = err instanceof Error ? err.message : "Unknown error";
