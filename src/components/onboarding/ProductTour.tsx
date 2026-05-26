@@ -167,7 +167,7 @@ export function ProductTour() {
   // Also expose a function to restart the tour (callable from Settings)
   useEffect(() => {
     if (typeof window !== "undefined") {
-      (window as Record<string, unknown>).__restartProductTour = () => {
+      (window as unknown as Record<string, unknown>).__restartProductTour = () => {
         localStorage.removeItem(TOUR_STORAGE_KEY);
         localStorage.removeItem(TOUR_DISMISSED_KEY);
         setShowPrompt(false);

@@ -4,7 +4,7 @@ import { Navigation } from "lucide-react";
 
 export function RestartTourButton() {
   function handleRestart() {
-    const fn = (window as Record<string, unknown>).__restartProductTour;
+    const fn = (window as unknown as Record<string, unknown>).__restartProductTour;
     if (typeof fn === "function") {
       (fn as () => void)();
     }

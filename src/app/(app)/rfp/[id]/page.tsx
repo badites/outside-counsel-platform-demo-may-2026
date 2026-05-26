@@ -78,6 +78,8 @@ export default async function RfpDetailPage({
           {/* AI Comparison & Coach */}
           <ComparisonSection
             rfpId={id}
+            rfpTitle={rfp.title}
+            rfpSubtitle={`${rfp.practiceArea?.name ?? ""} · ${rfp.jurisdiction?.name ?? ""}`}
             initialReport={comparison?.response ?? null}
             generatedAt={comparison?.createdAt?.toISOString() ?? null}
             hasSubmittedResponses={rfp.invitations.some((inv) => inv.status === "SUBMITTED")}

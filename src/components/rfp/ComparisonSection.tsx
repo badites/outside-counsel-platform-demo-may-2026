@@ -12,9 +12,12 @@ import {
 } from "lucide-react";
 import { AiGeneratedBadge } from "@/components/shared/AiGeneratedBadge";
 import { MarkdownReport } from "@/components/shared/MarkdownReport";
+import { ExportPdfButton } from "@/components/rfp/ExportPdfButton";
 
 interface ComparisonSectionProps {
   rfpId: string;
+  rfpTitle?: string;
+  rfpSubtitle?: string;
   initialReport: string | null;
   generatedAt: string | null;
   hasSubmittedResponses: boolean;
@@ -27,6 +30,8 @@ type CoachMessage = {
 
 export function ComparisonSection({
   rfpId,
+  rfpTitle,
+  rfpSubtitle,
   initialReport,
   generatedAt,
   hasSubmittedResponses,
@@ -150,6 +155,13 @@ export function ComparisonSection({
                 {new Date(reportDate).toLocaleTimeString()}
               </span>
             )}
+            {report && (
+              <ExportPdfButton
+                contentSelector="[data-pdf-content]"
+                title={rfpTitle ? `RFP Comparison: ${rfpTitle}` : "RFP Comparison Report"}
+                subtitle={rfpSubtitle}
+              />
+            )}
             {hasSubmittedResponses && (
               <button
                 onClick={handleGenerate}
@@ -179,7 +191,7 @@ export function ComparisonSection({
         )}
 
         {report ? (
-          <div className="mt-4 max-w-none">
+          <div className="mt-4 max-w-none" data-pdf-content>
             <MarkdownReport content={report} />
           </div>
         ) : (
