@@ -48,6 +48,7 @@ type ActionButton = {
 // ─── Parsing helpers ────────────────────────────────────────────────────────
 
 const ACTION_RE = /^\{\{(\w+)(?::([^}]*))?\}\}\s*$/;
+const FIRM_LINK_RE = /\[([^\]]+)\]\(\/firms\/([^)]+)\)/;
 
 function parseActionLine(line: string): ActionButton | null {
   const m = line.trim().match(ACTION_RE);
@@ -235,52 +236,110 @@ function MessageBubble({
         {isUser ? (
           <p>{message.content}</p>
         ) : (
-          <div className="space-y-2">
-            {message.content.split("\n").map((line, i) => {
-              if (!line.trim()) return <div key={i} className="h-1.5" />;
+          (() => {
+            const lines = message.content.split("\n");
+            // Pre-scan: collect firm IDs that already have explicit {{add_shortlist}} tokens
+            const explicitIds = new Set<string>();
+            for (const l of lines) {
+              const m = l.trim().match(/^\{\{add_shortlist:([^:}]+)/);
+              if (m) explicitIds.add(m[1]);
+            }
 
-              const action = parseActionLine(line);
-              if (action) {
-                const actionKey = `${message.id}:${action.type}:${action.param ?? ""}`;
-                return (
-                  <div key={i}>
-                    <ActionButtonUI
-                      action={action}
-                      onAction={(a) => onAction(a, message.id)}
-                      disabled={isActionDisabled}
-                      consumed={consumedActions.has(actionKey)}
-                    />
-                  </div>
-                );
-              }
+            // Track firm IDs that already got an auto-generated button (avoid duplicates)
+            const autoButtonIds = new Set<string>();
 
-              if (/^---+$/.test(line.trim())) {
-                return <hr key={i} className="my-2 border-gray-200" />;
-              }
-              if (
-                line.trim().startsWith("- ") ||
-                line.trim().startsWith("• ")
-              ) {
-                return (
-                  <p key={i} className="pl-3 text-gray-700">
-                    {parseResultLinks(line)}
-                  </p>
-                );
-              }
-              if (/^\d+\./.test(line.trim())) {
-                return (
-                  <div key={i} className="text-gray-700">
-                    {parseResultLinks(line)}
-                  </div>
-                );
-              }
+            // Helper: render an inline "Add to shortlist" button for a firm link
+            function autoShortlistBtn(line: string) {
+              const fm = line.match(FIRM_LINK_RE);
+              if (!fm) return null;
+              const [, firmName, firmId] = fm;
+              if (explicitIds.has(firmId)) return null; // AI already emitted a button
+              if (autoButtonIds.has(firmId)) return null; // already rendered for this firm
+              autoButtonIds.add(firmId);
+              const actionKey = `${message.id}:add_shortlist:${firmId}`;
+              const isConsumed = consumedActions.has(actionKey);
+              const action: ActionButton = {
+                type: "add_shortlist",
+                param: firmId,
+                label: firmName,
+              };
               return (
-                <p key={i} className="text-gray-700">
-                  {parseResultLinks(line)}
-                </p>
+                <ActionButtonUI
+                  action={action}
+                  onAction={(a) => onAction(a, message.id)}
+                  disabled={isActionDisabled}
+                  consumed={isConsumed}
+                />
               );
-            })}
-          </div>
+            }
+
+            return (
+              <div className="space-y-2">
+                {lines.map((line, i) => {
+                  if (!line.trim()) return <div key={i} className="h-1.5" />;
+
+                  const action = parseActionLine(line);
+                  if (action) {
+                    const actionKey = `${message.id}:${action.type}:${action.param ?? ""}`;
+                    return (
+                      <div key={i}>
+                        <ActionButtonUI
+                          action={action}
+                          onAction={(a) => onAction(a, message.id)}
+                          disabled={isActionDisabled}
+                          consumed={consumedActions.has(actionKey)}
+                        />
+                      </div>
+                    );
+                  }
+
+                  if (/^---+$/.test(line.trim())) {
+                    return <hr key={i} className="my-2 border-gray-200" />;
+                  }
+
+                  // Firm heading (## or ### Firm Name — details)
+                  if (/^#{2,3}\s/.test(line.trim())) {
+                    return (
+                      <div key={i}>
+                        <p className="mt-2 font-semibold text-gray-900">
+                          {parseResultLinks(line.trim().replace(/^#{2,3}\s*/, ""))}
+                        </p>
+                        {autoShortlistBtn(line)}
+                      </div>
+                    );
+                  }
+
+                  if (
+                    line.trim().startsWith("- ") ||
+                    line.trim().startsWith("• ")
+                  ) {
+                    return (
+                      <p key={i} className="pl-3 text-gray-700">
+                        {parseResultLinks(line)}
+                      </p>
+                    );
+                  }
+                  if (/^\d+\./.test(line.trim())) {
+                    const btn = autoShortlistBtn(line);
+                    return (
+                      <div key={i} className="text-gray-700">
+                        {parseResultLinks(line)}
+                        {btn}
+                      </div>
+                    );
+                  }
+                  return (
+                    <div key={i}>
+                      <p className="text-gray-700">
+                        {parseResultLinks(line)}
+                      </p>
+                      {autoShortlistBtn(line)}
+                    </div>
+                  );
+                })}
+              </div>
+            );
+          })()
         )}
       </div>
     </div>
