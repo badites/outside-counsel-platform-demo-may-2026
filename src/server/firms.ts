@@ -95,6 +95,7 @@ export async function createFirm(data: CreateFirmInput) {
       foundedYear: data.foundedYear ?? null,
       parentFirmId: data.parentFirmId || null,
       notes: data.notes || null,
+      internalNotes: data.internalNotes || null,
     },
   });
 }
@@ -115,6 +116,7 @@ export async function updateFirm(id: string, data: UpdateFirmInput) {
         parentFirmId: data.parentFirmId || null,
       }),
       ...(data.notes !== undefined && { notes: data.notes || null }),
+      ...(data.internalNotes !== undefined && { internalNotes: data.internalNotes || null }),
     },
   });
 }

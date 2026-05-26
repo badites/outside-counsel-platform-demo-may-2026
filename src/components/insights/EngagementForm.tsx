@@ -56,17 +56,30 @@ export function EngagementForm({
       <form action={formAction}>
         <input type="hidden" name="firmId" value={firmId} />
 
-        <div className="mb-3">
-          <label className="mb-1 block text-xs font-medium text-gray-600">
-            Matter Name *
-          </label>
-          <input
-            type="text"
-            name="matterName"
-            required
-            className="w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:border-scg-500 focus:outline-none"
-            placeholder="e.g. SCG Chemicals JV Dispute"
-          />
+        <div className="mb-3 grid grid-cols-3 gap-3">
+          <div className="col-span-2">
+            <label className="mb-1 block text-xs font-medium text-gray-600">
+              Matter Name *
+            </label>
+            <input
+              type="text"
+              name="matterName"
+              required
+              className="w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:border-scg-500 focus:outline-none"
+              placeholder="e.g. SCG Chemicals JV Dispute"
+            />
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-medium text-gray-600">
+              Matter No.
+            </label>
+            <input
+              type="text"
+              name="matterNo"
+              className="w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:border-scg-500 focus:outline-none"
+              placeholder="e.g. MS-2024-0123"
+            />
+          </div>
         </div>
 
         <div className="mb-3 grid grid-cols-2 gap-3">

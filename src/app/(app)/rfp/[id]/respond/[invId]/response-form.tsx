@@ -5,7 +5,9 @@ import { useRouter } from "next/navigation";
 import { Label } from "@/components/ui/Label";
 import { Input } from "@/components/ui/Input";
 import { Textarea } from "@/components/ui/Textarea";
-import { CheckCircle2, Send } from "lucide-react";
+import { CheckCircle2, Send, Plus, Trash2 } from "lucide-react";
+
+type FeePhase = { phase: string; fee: string };
 
 export function FirmResponseForm({
   invitationId,
@@ -23,13 +25,38 @@ export function FirmResponseForm({
   additionalRequirements: string | null;
 }) {
   const router = useRouter();
-  const [feeCapAmount, setFeeCapAmount] = useState("");
   const [feeType, setFeeType] = useState("CAPPED");
   const [currency, setCurrency] = useState("THB");
+  const [phases, setPhases] = useState<FeePhase[]>([
+    { phase: "", fee: "" },
+  ]);
   const [staffingPlan, setStaffingPlan] = useState("");
   const [responseDocument, setResponseDocument] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
+
+  function addPhase() {
+    setPhases((prev) => [...prev, { phase: "", fee: "" }]);
+  }
+
+  function removePhase(index: number) {
+    setPhases((prev) => prev.filter((_, i) => i !== index));
+  }
+
+  function updatePhase(index: number, field: keyof FeePhase, value: string) {
+    setPhases((prev) =>
+      prev.map((p, i) => (i === index ? { ...p, [field]: value } : p))
+    );
+  }
+
+  // Calculate total from phases
+  const totalFee = phases.reduce((sum, p) => {
+    const val = parseFloat(p.fee);
+    return sum + (isNaN(val) ? 0 : val);
+  }, 0);
+
+  // Check if any phase has a name (means user is using phased pricing)
+  const hasNamedPhases = phases.some((p) => p.phase.trim() !== "");
 
   async function handleSubmit() {
     setSubmitting(true);
@@ -39,10 +66,21 @@ export function FirmResponseForm({
         staffingPlan: staffingPlan || undefined,
       };
 
-      if (feeCapAmount) {
-        body.proposedFeeCents = Math.round(parseFloat(feeCapAmount) * 100);
+      if (totalFee > 0) {
+        body.proposedFeeCents = Math.round(totalFee * 100);
         body.proposedFeeType = feeType;
         body.currencyCode = currency;
+      }
+
+      // Build fee breakdown if phases have names
+      const namedPhases = phases.filter(
+        (p) => p.phase.trim() && parseFloat(p.fee) > 0
+      );
+      if (namedPhases.length > 0) {
+        body.feeBreakdown = namedPhases.map((p) => ({
+          phase: p.phase.trim(),
+          feeCents: Math.round(parseFloat(p.fee) * 100),
+        }));
       }
 
       const res = await fetch(`/api/rfp/${rfpId}/invitations/${invitationId}`, {
@@ -87,46 +125,96 @@ export function FirmResponseForm({
       )}
 
       {requestFeeCap && (
-        <div className="space-y-2 rounded-lg border border-gray-200 p-4">
-          <Label className="text-sm font-medium">Proposed fee cap</Label>
-          <p className="text-xs text-gray-400">
-            Enter the maximum fee you are proposing for this matter.
-          </p>
-          <div className="flex items-center gap-2">
-            <select
-              value={currency}
-              onChange={(e) => setCurrency(e.target.value)}
-              className="rounded-md border border-gray-200 px-2 py-2 text-sm"
-            >
-              <option value="THB">THB</option>
-              <option value="USD">USD</option>
-              <option value="SGD">SGD</option>
-              <option value="EUR">EUR</option>
-              <option value="GBP">GBP</option>
-              <option value="JPY">JPY</option>
-            </select>
-            <Input
-              type="number"
-              value={feeCapAmount}
-              onChange={(e) => setFeeCapAmount(e.target.value)}
-              placeholder="e.g., 500000"
-              className="w-48"
-            />
+        <div className="space-y-3 rounded-lg border border-gray-200 p-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <Label className="text-sm font-medium">Fee proposal by scope / phase</Label>
+              <p className="text-xs text-gray-400">
+                Break down your fee by work phase. Name each phase (e.g. &quot;Pre-merger advisory&quot;, &quot;Implementation&quot;, &quot;Post-merger integration&quot;).
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <select
+                value={currency}
+                onChange={(e) => setCurrency(e.target.value)}
+                className="rounded-md border border-gray-200 px-2 py-1.5 text-sm"
+              >
+                <option value="THB">THB</option>
+                <option value="USD">USD</option>
+                <option value="SGD">SGD</option>
+                <option value="EUR">EUR</option>
+                <option value="GBP">GBP</option>
+                <option value="JPY">JPY</option>
+              </select>
+              <select
+                value={feeType}
+                onChange={(e) => setFeeType(e.target.value)}
+                className="rounded-md border border-gray-200 px-2 py-1.5 text-sm"
+              >
+                <option value="CAPPED">Capped</option>
+                <option value="FIXED">Fixed</option>
+                <option value="HOURLY">Hourly (with cap)</option>
+                <option value="BLENDED">Blended rate</option>
+                <option value="PHASED_FIXED">Phased fixed</option>
+                <option value="SUCCESS">Success fee</option>
+              </select>
+            </div>
           </div>
-          <div className="flex items-center gap-2">
-            <Label className="text-xs text-gray-500">Fee type:</Label>
-            <select
-              value={feeType}
-              onChange={(e) => setFeeType(e.target.value)}
-              className="rounded-md border border-gray-200 px-2 py-1.5 text-sm"
+
+          {/* Phase rows */}
+          <div className="space-y-2">
+            {phases.map((phase, i) => (
+              <div key={i} className="flex items-center gap-2">
+                <Input
+                  value={phase.phase}
+                  onChange={(e) => updatePhase(i, "phase", e.target.value)}
+                  placeholder={
+                    i === 0
+                      ? "e.g. Pre-merger advisory"
+                      : i === 1
+                      ? "e.g. Implementation / execution"
+                      : "e.g. Post-merger integration"
+                  }
+                  className="flex-1 text-sm"
+                />
+                <div className="relative w-44 shrink-0">
+                  <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-xs text-gray-400">
+                    {currency}
+                  </span>
+                  <Input
+                    type="number"
+                    value={phase.fee}
+                    onChange={(e) => updatePhase(i, "fee", e.target.value)}
+                    placeholder="Amount"
+                    className="pl-12 text-sm"
+                  />
+                </div>
+                {phases.length > 1 && (
+                  <button
+                    onClick={() => removePhase(i)}
+                    className="rounded p-1 text-gray-400 hover:bg-red-50 hover:text-red-500"
+                  >
+                    <Trash2 size={14} />
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+
+          <div className="flex items-center justify-between">
+            <button
+              onClick={addPhase}
+              className="inline-flex items-center gap-1 rounded-md border border-dashed border-gray-300 px-3 py-1.5 text-xs text-gray-500 hover:border-scg-400 hover:text-scg-700"
             >
-              <option value="CAPPED">Capped</option>
-              <option value="FIXED">Fixed</option>
-              <option value="HOURLY">Hourly (with cap)</option>
-              <option value="BLENDED">Blended rate</option>
-              <option value="PHASED_FIXED">Phased fixed</option>
-              <option value="SUCCESS">Success fee</option>
-            </select>
+              <Plus size={12} />
+              Add phase
+            </button>
+            <div className="text-right">
+              <span className="text-xs text-gray-400">Total: </span>
+              <span className="text-sm font-semibold text-gray-900">
+                {currency} {totalFee.toLocaleString()}
+              </span>
+            </div>
           </div>
         </div>
       )}

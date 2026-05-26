@@ -5,7 +5,7 @@ import { getLatestComparison } from "@/server/rfp/comparison";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { RfpStatusBadge } from "@/components/rfp/RfpStatusBadge";
 import { InvitationStatusTracker } from "@/components/rfp/InvitationStatusTracker";
-import { ComparisonReport } from "@/components/rfp/ComparisonReport";
+import { ComparisonSection } from "@/components/rfp/ComparisonSection";
 
 export const dynamic = "force-dynamic";
 
@@ -75,13 +75,13 @@ export default async function RfpDetailPage({
             </div>
           </section>
 
-          {/* AI Comparison */}
-          {comparison && (
-            <ComparisonReport
-              content={comparison.response}
-              generatedAt={comparison.createdAt}
-            />
-          )}
+          {/* AI Comparison & Coach */}
+          <ComparisonSection
+            rfpId={id}
+            initialReport={comparison?.response ?? null}
+            generatedAt={comparison?.createdAt?.toISOString() ?? null}
+            hasSubmittedResponses={rfp.invitations.some((inv) => inv.status === "SUBMITTED")}
+          />
         </div>
 
         {/* Sidebar info */}

@@ -152,6 +152,15 @@ export default async function FirmDetailPage({ params }: FirmDetailPageProps) {
                 <p className="text-sm text-gray-600">{firm.notes}</p>
               </div>
             )}
+
+            {firm.internalNotes && (
+              <div className="mt-3 rounded-md border border-amber-200 bg-amber-50 p-3">
+                <p className="mb-1 text-xs font-semibold uppercase tracking-wider text-amber-700">
+                  AI Knowledge Notes
+                </p>
+                <p className="text-sm text-amber-800">{firm.internalNotes}</p>
+              </div>
+            )}
           </div>
 
           {/* Lawyers */}

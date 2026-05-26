@@ -1,14 +1,20 @@
-import { Sparkles } from "lucide-react";
+import { Sparkles, Brain, MessageSquare } from "lucide-react";
 import { getCurrentUser } from "@/server/current-user";
 import { getUserPreference } from "@/server/preferences";
+import { getAiBriefing } from "@/server/platform-settings";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { PreferenceForm } from "@/components/settings/PreferenceForm";
+import { AiBriefingForm } from "@/components/settings/AiBriefingForm";
+import { AiNotesAssistant } from "@/components/settings/AiNotesAssistant";
 
 export const dynamic = "force-dynamic";
 
 export default async function SettingsPage() {
   const user = await getCurrentUser();
-  const weights = await getUserPreference(user.id);
+  const [weights, aiBriefing] = await Promise.all([
+    getUserPreference(user.id),
+    getAiBriefing(),
+  ]);
 
   return (
     <div>
@@ -18,6 +24,43 @@ export default async function SettingsPage() {
       />
 
       <div className="mx-auto max-w-2xl">
+        {/* AI Briefing Section */}
+        <div className="mb-8 rounded-lg border border-gray-200 bg-white p-6">
+          <div className="mb-4 flex items-start gap-3">
+            <Brain size={20} className="mt-0.5 text-scg-600" />
+            <div>
+              <h3 className="text-sm font-semibold text-gray-900">
+                AI Knowledge Briefing
+              </h3>
+              <p className="mt-1 text-xs text-gray-500">
+                Global instructions for the AI Counsel Finder. Use this to encode
+                institutional knowledge that should guide all recommendations —
+                e.g. which firms are limited to specific work types, preferred
+                firms for certain practice areas, or caveats about timesheet data.
+              </p>
+            </div>
+          </div>
+          <AiBriefingForm currentBriefing={aiBriefing} />
+        </div>
+
+        {/* AI Notes Assistant */}
+        <div className="mb-8 rounded-lg border border-gray-200 bg-white p-6">
+          <div className="mb-4 flex items-start gap-3">
+            <MessageSquare size={20} className="mt-0.5 text-scg-600" />
+            <div>
+              <h3 className="text-sm font-semibold text-gray-900">
+                Firm Notes Assistant
+              </h3>
+              <p className="mt-1 text-xs text-gray-500">
+                Tell the AI what you know about firms in plain English. It will
+                find matching firms, draft the notes, and let you review before
+                saving.
+              </p>
+            </div>
+          </div>
+          <AiNotesAssistant />
+        </div>
+
         <div className="mb-6 rounded-lg border border-amber-200 bg-amber-50 p-4">
           <div className="flex items-start gap-3">
             <Sparkles size={18} className="mt-0.5 text-amber-500" />

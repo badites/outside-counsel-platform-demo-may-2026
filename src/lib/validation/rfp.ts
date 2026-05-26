@@ -96,10 +96,16 @@ export const draftRfpSchema = z.object({
   deadline: z.string().optional(),
 });
 
+export const feePhaseSchema = z.object({
+  phase: z.string().min(1),
+  feeCents: z.number().int().nonnegative(),
+});
+
 export const invitationResponseSchema = z.object({
   proposedFeeCents: z.number().int().positive().optional(),
   proposedFeeType: feeTypeSchema.optional(),
   currencyCode: z.string().length(3).optional(),
+  feeBreakdown: z.array(feePhaseSchema).optional(),
   staffingPlan: z.string().optional(),
   responseDocument: z.string().optional(),
   aiDisclosure: z.string().optional(),

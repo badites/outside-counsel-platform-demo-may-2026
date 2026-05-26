@@ -58,6 +58,7 @@ export const createFirmSchema = z.object({
     .optional(),
   parentFirmId: z.string().optional(),
   notes: z.string().max(2000).optional(),
+  internalNotes: z.string().max(5000).optional(),
 });
 
 export type CreateFirmInput = z.infer<typeof createFirmSchema>;
@@ -337,6 +338,7 @@ export const OUTCOME_LABELS: Record<EngagementOutcomeEnum, string> = {
 export const createEngagementSchema = z.object({
   firmId: z.string().min(1, "Firm is required"),
   lawyerId: z.string().optional(),
+  matterNo: z.string().max(50, "Matter number is too long").optional(),
   matterName: z.string().min(1, "Matter name is required").max(500),
   matterType: matterTypeEnum,
   jurisdictionId: z.string().optional(),

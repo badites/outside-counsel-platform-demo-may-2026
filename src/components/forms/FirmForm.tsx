@@ -21,6 +21,7 @@ interface FirmFormProps {
     foundedYear?: number | null;
     parentFirmId?: string | null;
     notes?: string | null;
+    internalNotes?: string | null;
   };
   firms?: { id: string; name: string; shortName: string | null }[];
   submitLabel: string;
@@ -135,6 +136,15 @@ export function FirmForm({
         defaultValue={initialData?.notes ?? ""}
         error={state.errors?.notes?.[0]}
         placeholder="Internal notes about this firm..."
+      />
+
+      <Textarea
+        name="internalNotes"
+        label="AI Knowledge Notes"
+        defaultValue={initialData?.internalNotes ?? ""}
+        error={state.errors?.internalNotes?.[0]}
+        placeholder="Context for AI recommendations, e.g. 'Corporate secretary only — do not recommend for M&A advisory based on timesheet volume' or 'Best for complex cross-border deals, engage through Partner X'"
+        rows={4}
       />
 
       <div className="flex justify-end gap-3">

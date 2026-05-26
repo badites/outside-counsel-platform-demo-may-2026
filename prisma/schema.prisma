@@ -357,8 +357,9 @@ model Firm {
   parentFirm   Firm?       @relation("FirmSpinOffs", fields: [parentFirmId], references: [id])
   spinOffs     Firm[]      @relation("FirmSpinOffs")
   isActive     Boolean     @default(true) @map("is_active")
-  notes        String?
-  createdAt    DateTime    @default(now()) @map("created_at")
+  notes         String?
+  internalNotes String?     @map("internal_notes")
+  createdAt     DateTime    @default(now()) @map("created_at")
   updatedAt    DateTime    @updatedAt @map("updated_at")
   deletedAt    DateTime?   @map("deleted_at")
 
@@ -574,6 +575,7 @@ model Engagement {
   firm           Firm              @relation(fields: [firmId], references: [id])
   lawyerId       String?           @map("lawyer_id")
   lawyer         Lawyer?           @relation(fields: [lawyerId], references: [id])
+  matterNo       String?           @map("matter_no") // e.g. MatterSphere matter number
   matterName     String            @map("matter_name")
   matterType     MatterType        @map("matter_type")
   jurisdictionId String?           @map("jurisdiction_id")
@@ -1141,6 +1143,7 @@ model RfpInvitation {
   currencyCode  String?         @map("currency_code")
   staffingPlan  String?         @map("staffing_plan")
   responseDocument String?      @map("response_document")
+  feeBreakdown  String?         @map("fee_breakdown")
   aiDisclosure  String?         @map("ai_disclosure")
   createdAt     DateTime        @default(now()) @map("created_at")
   updatedAt     DateTime        @updatedAt @map("updated_at")

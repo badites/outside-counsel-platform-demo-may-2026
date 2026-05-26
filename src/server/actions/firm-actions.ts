@@ -23,6 +23,7 @@ export async function createFirmAction(
     foundedYear: raw.foundedYear || undefined,
     parentFirmId: raw.parentFirmId || undefined,
     notes: raw.notes || undefined,
+    internalNotes: raw.internalNotes || undefined,
   });
 
   if (!parsed.success) {
@@ -50,6 +51,7 @@ export async function updateFirmAction(
     foundedYear: raw.foundedYear || undefined,
     parentFirmId: raw.parentFirmId || undefined,
     notes: raw.notes || undefined,
+    internalNotes: raw.internalNotes || undefined,
   });
 
   if (!parsed.success) {

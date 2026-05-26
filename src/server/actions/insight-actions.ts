@@ -164,6 +164,7 @@ export async function addEngagementAction(
       data: {
         firmId: d.firmId,
         lawyerId: d.lawyerId || null,
+        matterNo: d.matterNo || null,
         matterName: d.matterName,
         matterType: d.matterType,
         jurisdictionId: d.jurisdictionId || null,

@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Briefcase } from "lucide-react";
+import { Briefcase, Plus } from "lucide-react";
 import { listEngagements } from "@/server/insights";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Badge } from "@/components/ui/Badge";
@@ -15,6 +15,15 @@ export default async function EngagementsPage() {
       <PageHeader
         title="Engagements"
         description={`${engagements.length} engagement${engagements.length !== 1 ? "s" : ""} tracked`}
+        action={
+          <Link
+            href="/engagements/new"
+            className="inline-flex items-center gap-2 rounded-md bg-scg-700 px-4 py-2 text-sm font-medium text-white hover:bg-scg-800"
+          >
+            <Plus size={16} />
+            Add Engagement
+          </Link>
+        }
       />
 
       {engagements.length === 0 ? (
@@ -29,6 +38,7 @@ export default async function EngagementsPage() {
             <thead className="bg-gray-50">
               <tr>
                 <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Matter</th>
+                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Matter No.</th>
                 <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Firm</th>
                 <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Lead Lawyer</th>
                 <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Type</th>
@@ -45,6 +55,11 @@ export default async function EngagementsPage() {
                     {eng.jurisdiction && (
                       <p className="text-xs text-gray-400">{eng.jurisdiction.name}</p>
                     )}
+                  </td>
+                  <td className="px-4 py-3">
+                    <span className="font-mono text-xs text-gray-500">
+                      {eng.matterNo ?? "-"}
+                    </span>
                   </td>
                   <td className="px-4 py-3">
                     <Link href={`/firms/${eng.firm.id}`} className="text-sm text-gray-700 hover:text-scg-700">

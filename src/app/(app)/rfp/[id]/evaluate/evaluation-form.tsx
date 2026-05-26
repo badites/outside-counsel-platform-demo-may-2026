@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/Label";
 
 type Criterion = { name: string; weight: number };
 type ExistingScore = { criterionName: string; score: number; comment: string | null };
+type FeePhase = { phase: string; feeCents: number };
 type Invitation = {
   id: string;
   firmName: string;
@@ -14,6 +15,9 @@ type Invitation = {
   proposedFeeCents: number | null;
   currencyCode: string | null;
   proposedFeeType: string | null;
+  feeBreakdown: string | null;
+  staffingPlan: string | null;
+  responseDocument: string | null;
   existingScores: ExistingScore[];
 };
 
@@ -124,11 +128,60 @@ export function EvaluationForm({
             </div>
 
             {inv.proposedFeeCents && (
-              <p className="mt-1 text-xs text-gray-500">
-                Fee: {inv.currencyCode ?? "USD"}{" "}
-                {(inv.proposedFeeCents / 100).toLocaleString()}{" "}
-                ({inv.proposedFeeType ?? "N/A"})
-              </p>
+              <div className="mt-1">
+                <p className="text-xs text-gray-500">
+                  Total fee: {inv.currencyCode ?? "USD"}{" "}
+                  {(inv.proposedFeeCents / 100).toLocaleString()}{" "}
+                  ({inv.proposedFeeType ?? "N/A"})
+                </p>
+                {(() => {
+                  try {
+                    const phases: FeePhase[] = inv.feeBreakdown ? JSON.parse(inv.feeBreakdown) : [];
+                    if (phases.length > 0) {
+                      return (
+                        <div className="mt-1 flex flex-wrap gap-2">
+                          {phases.map((p, idx) => (
+                            <span
+                              key={idx}
+                              className="inline-flex items-center gap-1 rounded-full bg-gray-100 px-2 py-0.5 text-[10px] text-gray-600"
+                            >
+                              <span className="font-medium">{p.phase}:</span>
+                              <span>{inv.currencyCode ?? "USD"} {(p.feeCents / 100).toLocaleString()}</span>
+                            </span>
+                          ))}
+                        </div>
+                      );
+                    }
+                  } catch { /* ignore */ }
+                  return null;
+                })()}
+              </div>
+            )}
+
+            {/* Response details */}
+            {(inv.staffingPlan || inv.responseDocument) && (
+              <div className="mt-3 space-y-2 rounded-md bg-gray-50 p-3">
+                {inv.staffingPlan && (
+                  <div>
+                    <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">
+                      Staffing Plan
+                    </p>
+                    <p className="mt-1 text-xs text-gray-600 whitespace-pre-wrap">
+                      {inv.staffingPlan}
+                    </p>
+                  </div>
+                )}
+                {inv.responseDocument && (
+                  <div>
+                    <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">
+                      Proposal Narrative
+                    </p>
+                    <p className="mt-1 text-xs text-gray-600 whitespace-pre-wrap line-clamp-6">
+                      {inv.responseDocument}
+                    </p>
+                  </div>
+                )}
+              </div>
             )}
 
             <div className="mt-4 space-y-3">

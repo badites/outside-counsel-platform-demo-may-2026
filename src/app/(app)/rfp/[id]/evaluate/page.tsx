@@ -30,6 +30,9 @@ export default async function EvaluatePage({
       proposedFeeCents: inv.proposedFeeCents,
       currencyCode: inv.currencyCode,
       proposedFeeType: inv.proposedFeeType,
+      staffingPlan: inv.staffingPlan,
+      responseDocument: inv.responseDocument,
+      feeBreakdown: inv.feeBreakdown,
       existingScores: inv.evaluations.map((ev) => ({
         criterionName: ev.criterionName,
         score: ev.score,

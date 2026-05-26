@@ -46,6 +46,21 @@ export async function generateComparisonReport(
         ? `${inv.currencyCode ?? "USD"} ${(inv.proposedFeeCents / 100).toLocaleString()} (${inv.proposedFeeType ?? "N/A"})`
         : "Not provided";
 
+      // Parse phase-level fee breakdown
+      let phaseBreakdown = "";
+      try {
+        if (inv.feeBreakdown) {
+          const phases = JSON.parse(inv.feeBreakdown) as Array<{ phase: string; feeCents: number }>;
+          if (phases.length > 0) {
+            phaseBreakdown = "\nFee breakdown by phase:\n" + phases
+              .map((p) => `  - ${p.phase}: ${inv.currencyCode ?? "USD"} ${(p.feeCents / 100).toLocaleString()}`)
+              .join("\n");
+          }
+        }
+      } catch {
+        // ignore parse errors
+      }
+
       let staffing = "Not provided";
       try {
         if (inv.staffingPlan) {
@@ -57,10 +72,10 @@ export async function generateComparisonReport(
       }
 
       return `## Firm ${i + 1}: ${inv.firm.name} (${inv.firm.firmType})
-Fee proposal: ${feeDisplay}
+Total fee proposal: ${feeDisplay}${phaseBreakdown}
 Staffing plan: ${staffing}
 AI disclosure: ${inv.aiDisclosure ?? "None provided"}
-Response document: ${inv.responseDocument ? "Provided" : "Not provided"}`;
+Response document: ${inv.responseDocument ?? "Not provided"}`;
     })
     .join("\n\n");
 
@@ -84,9 +99,17 @@ ${firmSummaries}
 Produce a report with these sections:
 1. EXECUTIVE SUMMARY — 3-4 sentences on overall assessment
 2. FIRM-BY-FIRM ANALYSIS — for each firm: strengths, weaknesses, risks
-3. COMPARATIVE TABLE — score each firm 1-5 on each criterion with brief justification
-4. RECOMMENDATION — rank order with rationale, name a top pick
-5. RISK FLAGS — any concerns (conflicts, capacity, pricing anomalies)
+3. SCOPE COVERAGE ANALYSIS — This is critical. Parse the RFP scope document into discrete deliverables/work items (e.g. "tax computation", "employee transfer", "regulatory filings", "due diligence", etc.). Then for EACH firm, check their response document and staffing plan to determine whether each scope item is:
+   - **Explicitly covered** — the firm specifically mentions this deliverable
+   - **Implicitly bundled** — the firm uses broad language that probably includes it but doesn't name it (e.g. "full M&A advisory" without specifying tax computation)
+   - **Not addressed** — no mention at all, unclear if included
+   - **Explicitly excluded** — the firm states this is out of scope or priced separately
+   Present this as a table: rows = scope items, columns = firms, cells = coverage status. Below the table, flag the highest-risk gaps — items that are important but only implicitly bundled or not addressed. Recommend specific clarification questions to ask each firm.
+   If the RFP scope document is empty or too vague to parse, note this and recommend the client define scope items before evaluating.
+4. PHASE-BY-PHASE FEE COMPARISON — if firms provided fee breakdowns by phase/scope, create a side-by-side comparison table showing each phase and what each firm charges. Highlight which firm is cheapest per phase. If a firm did NOT break down fees, note this. If no firm provided breakdowns, skip this section.
+5. COMPARATIVE TABLE — score each firm 1-5 on each criterion with brief justification
+6. RECOMMENDATION — rank order with rationale, name a top pick. If phase breakdowns exist, also recommend whether the client should consider splitting work across firms (e.g. engaging Firm A for Phase 1 and Firm B for Phase 2) and what the blended cost would be vs. a single-firm appointment.
+7. RISK FLAGS — any concerns (conflicts, capacity, pricing anomalies, scope gaps)
 
 Be specific and actionable. This report goes to the General Counsel.`;
 

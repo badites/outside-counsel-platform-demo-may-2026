@@ -77,6 +77,7 @@ export async function updateInvitationResponse(
       proposedFeeCents: data.proposedFeeCents,
       proposedFeeType: data.proposedFeeType,
       currencyCode: data.currencyCode,
+      feeBreakdown: data.feeBreakdown ? JSON.stringify(data.feeBreakdown) : null,
       staffingPlan: data.staffingPlan,
       responseDocument: data.responseDocument,
       aiDisclosure: data.aiDisclosure,

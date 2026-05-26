@@ -3,6 +3,7 @@ import { computeNps } from "@/server/insights";
 import { getCurrentUser } from "@/server/current-user";
 import { streamClaude } from "@/server/ai/anthropic";
 import { getAggregatedInsights } from "@/server/timesheet";
+import { getAiBriefing } from "@/server/platform-settings";
 
 const INSTRUCTIONS = `You are the AI assistant for SCG's Outside Counsel Directory — an internal tool used by the in-house legal team to find and evaluate law firms and individual lawyers.
 
@@ -26,6 +27,16 @@ When recommending firms, ALWAYS consider timesheet intelligence:
 4. **Key insights** are AI-generated observations about the team's work patterns.
 
 PRIORITIZE firms the team already works with when they are a good fit. A firm with 42 timesheet mentions and relevant practice coverage is a STRONGER recommendation than a highly-ranked firm with zero engagement history. However, also suggest new options when appropriate — just flag them as "not yet in your engagement history."
+
+## INTERNAL KNOWLEDGE NOTES (CRITICAL — HIGHEST PRIORITY)
+
+Some firms have an "internalNotes" field in the directory data. These are curated notes from the in-house legal team that OVERRIDE timesheet data and rankings. They contain institutional knowledge about what a firm is ACTUALLY used for, warnings, preferences, or context that raw data cannot capture.
+
+RULES:
+1. ALWAYS check internalNotes before recommending a firm. If the notes say "corporate secretary only — do not recommend for M&A," do NOT recommend that firm for M&A even if timesheets show M&A activity or rankings are strong.
+2. When internalNotes exist for a firm, weave them naturally into your recommendation: "Note: your team flags [Firm] as primarily used for [context from notes]."
+3. InternalNotes take priority over timesheet mentions and rankings when they conflict.
+4. If a global AI briefing is provided below, follow those instructions as overarching guidance for all recommendations.
 
 When presenting results, weave in timesheet context naturally:
 - "Your team already works extensively with [Firm] on [practice area] (X mentions in your timesheets)"
@@ -87,6 +98,7 @@ async function getDirectoryContext(): Promise<string> {
         firmType: true,
         headcount: true,
         website: true,
+        internalNotes: true,
         practiceAreas: {
           include: { practiceArea: true, jurisdiction: true },
         },
@@ -132,6 +144,7 @@ async function getDirectoryContext(): Promise<string> {
     type: f.firmType,
     headcount: f.headcount,
     website: f.website,
+    internalNotes: f.internalNotes,
     nps: computeNps(f.recommendations.map((r) => r.npsScore)).score,
     practiceAreas: [
       ...new Set(f.practiceAreas.map((pa) => pa.practiceArea.name)),
@@ -249,10 +262,11 @@ export async function POST(request: Request) {
 
   try {
     const user = await getCurrentUser();
-    const [directoryContext, shortlistContext, timesheetContext] = await Promise.all([
+    const [directoryContext, shortlistContext, timesheetContext, aiBriefing] = await Promise.all([
       getDirectoryContext(),
       getShortlistContext(user.id),
       getTimesheetContext(),
+      getAiBriefing(),
     ]);
 
     const conversationHistory = messages
@@ -269,7 +283,7 @@ export async function POST(request: Request) {
     }
     userMessage += `Human: ${latestMessage}\n\nRespond helpfully using the directory data above. Include action buttons where appropriate. Do not use any tools — all data you need is already provided.`;
 
-    const systemPrompt = `${INSTRUCTIONS}\n\n## ${shortlistContext}\n\n${timesheetContext ? `=== TIMESHEET INTELLIGENCE ===\n${timesheetContext}\n=== END TIMESHEET ===\n\n` : ""}=== DIRECTORY DATA (JSON) ===\n${directoryContext}\n=== END DATA ===`;
+    const systemPrompt = `${INSTRUCTIONS}\n\n## ${shortlistContext}\n\n${aiBriefing ? `=== GLOBAL AI BRIEFING (from legal team — follow these instructions) ===\n${aiBriefing}\n=== END BRIEFING ===\n\n` : ""}${timesheetContext ? `=== TIMESHEET INTELLIGENCE ===\n${timesheetContext}\n=== END TIMESHEET ===\n\n` : ""}=== DIRECTORY DATA (JSON) ===\n${directoryContext}\n=== END DATA ===`;
 
     const encoder = new TextEncoder();
     const stream = new ReadableStream({
