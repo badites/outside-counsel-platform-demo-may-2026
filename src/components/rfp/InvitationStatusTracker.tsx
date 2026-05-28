@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { Badge } from "@/components/ui/Badge";
+import { CopyLinkButton } from "@/components/rfp/CopyLinkButton";
 import { cn } from "@/lib/utils";
 import { CheckCircle2, Clock, XCircle, FileText, Star, Pencil } from "lucide-react";
 
@@ -50,13 +51,16 @@ export function InvitationStatusTracker({ rfpId, invitations }: { rfpId: string;
               <span className="text-sm font-medium text-gray-700">{inv.firmName}</span>
               <div className="flex items-center gap-2">
                 {inv.status === "INVITED" && (
-                  <Link
-                    href={`/rfp/${rfpId}/respond/${inv.id}`}
-                    className="inline-flex items-center gap-1 rounded px-2 py-0.5 text-[10px] font-medium text-scg-700 hover:bg-scg-50"
-                  >
-                    <Pencil size={10} />
-                    Enter response
-                  </Link>
+                  <>
+                    <CopyLinkButton rfpId={rfpId} invitationId={inv.id} />
+                    <Link
+                      href={`/rfp/${rfpId}/respond/${inv.id}`}
+                      className="inline-flex items-center gap-1 rounded px-2 py-0.5 text-[10px] font-medium text-scg-700 hover:bg-scg-50"
+                    >
+                      <Pencil size={10} />
+                      Enter response
+                    </Link>
+                  </>
                 )}
                 <Badge
                   variant="outline"

@@ -118,6 +118,24 @@ export const evaluationScoreSchema = z.object({
   comment: z.string().optional(),
 });
 
+export const proposalExtractionSchema = z.object({
+  feeType: feeTypeSchema.optional(),
+  currencyCode: z.string().length(3).optional(),
+  phases: z
+    .array(
+      z.object({
+        phase: z.string(),
+        feeCents: z.number().int().nonnegative(),
+      })
+    )
+    .optional(),
+  staffingPlan: z.string().optional(),
+  narrative: z.string().optional(),
+  totalFeeCents: z.number().int().nonnegative().optional(),
+  confidence: z.number().min(0).max(1).optional(),
+});
+
+export type ProposalExtraction = z.infer<typeof proposalExtractionSchema>;
 export type EvaluationCriterion = z.infer<typeof evaluationCriterionSchema>;
 export type DraftRfpInput = z.infer<typeof draftRfpSchema>;
 export type InvitationResponseInput = z.infer<typeof invitationResponseSchema>;

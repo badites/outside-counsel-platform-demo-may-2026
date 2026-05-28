@@ -1,3 +1,4 @@
+import { randomUUID } from "crypto";
 import { prisma } from "@/server/db";
 import type { DraftRfpInput, InvitationResponseInput, EvaluationScoreInput } from "@/lib/validation/rfp";
 
@@ -54,7 +55,7 @@ export async function sendInvitations(rfpId: string, firmIds: string[]) {
     for (const firmId of firmIds) {
       await tx.rfpInvitation.upsert({
         where: { rfpId_firmId: { rfpId, firmId } },
-        create: { rfpId, firmId, status: "INVITED" },
+        create: { rfpId, firmId, status: "INVITED", responseToken: randomUUID() },
         update: {},
       });
     }
@@ -63,6 +64,19 @@ export async function sendInvitations(rfpId: string, firmIds: string[]) {
       data: { status: "OPEN" },
     });
   });
+}
+
+export async function getOrCreateResponseToken(invitationId: string): Promise<string> {
+  const inv = await prisma.rfpInvitation.findUniqueOrThrow({
+    where: { id: invitationId },
+  });
+  if (inv.responseToken) return inv.responseToken;
+  const token = randomUUID();
+  await prisma.rfpInvitation.update({
+    where: { id: invitationId },
+    data: { responseToken: token },
+  });
+  return token;
 }
 
 export async function updateInvitationResponse(
